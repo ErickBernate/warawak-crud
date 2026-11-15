@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 102 64" width="102" height="64" role="img" aria-label="Warawak">
+  <rect width="102" height="64" fill="#E8D8CB"/>
+  <path d="M10 44 L30 14 L42 30 L52 20 L72 44" fill="none" stroke="#1BB6D6" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M28 20 L33 26 M60 28 L64 33" stroke="#1BB6D6" stroke-width="2" stroke-linecap="round"/>
+  <text x="51" y="58" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="19" fill="#1BB6D6">Warawak</text>
+</svg>

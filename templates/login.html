@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titulo %}Iniciar sesión · Warawak{% endblock %}
+
+{% block menu %}
+<div class="iconos-encabezado" aria-hidden="true">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L21 7H6"/></svg>
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="4"/><path d="M4 21v-1.5A5.5 5.5 0 0 1 9.5 14h5a5.5 5.5 0 0 1 5.5 5.5V21"/></svg>
+</div>
+{% endblock %}
+
+{% block contenido %}
+<section class="login">
+  <div class="login-foto" role="img" aria-label="Equipo de Warawak"></div>
+
+  <div class="login-panel">
+    <form method="post" class="login-form" novalidate>
+      <h1>Iniciar Sesion</h1>
+
+      {% with mensajes = get_flashed_messages(with_categories=true) %}
+        {% for categoria, mensaje in mensajes %}
+          <p class="aviso aviso-{{ categoria }}" role="alert">{{ mensaje }}</p>
+        {% endfor %}
+      {% endwith %}
+
+      <label class="solo-lectores" for="nombre">Nombre</label>
+      <input class="campo" type="text" id="nombre" name="nombre" placeholder="Nombre" autocomplete="username" required autofocus>
+
+      <label class="solo-lectores" for="password">Contraseña</label>
+      <input class="campo" type="password" id="password" name="password" placeholder="Contraseña" autocomplete="current-password" required>
+
+      <button type="submit" class="boton-ingresar">Ingresar</button>
+      <p class="login-registro">No tienes una Cuenta? <strong>Crea una aqui</strong></p>
+    </form>
+  </div>
+</section>
+{% endblock %}

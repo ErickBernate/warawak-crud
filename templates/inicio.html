@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}Inicio · Warawak{% endblock %}
+
+{% block menu %}
+<nav class="menu" aria-label="Principal">
+  <a href="{{ url_for('inicio') }}" aria-current="page">Inicio</a>
+  <span class="pendiente" title="Próximamente">Crear Producto</span>
+  <span class="pendiente" title="Próximamente">Editar Producto</span>
+  <span class="pendiente" title="Próximamente">Eliminar Producto</span>
+</nav>
+<a class="salir" href="{{ url_for('logout') }}">
+  Salir
+  <svg width="18" height="22" viewBox="0 0 18 22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 21V1h8v20"/><path d="M1 21h8"/><path d="M9 11h8M14 7l4 4-4 4" transform="translate(-1 0)"/></svg>
+</a>
+{% endblock %}
+
+{% block contenido %}
+<div class="banner" role="img" aria-label="Interior del local Warawak"></div>
+<h1 class="bienvenida">Bienvenido {{ current_user.nombre }}</h1>
+
+{% if productos %}
+<ul class="productos">
+  {% for p in productos %}
+  <li class="producto">
+    <div class="producto-foto">
+      {% if p.imagen %}
+        <img src="{{ url_for('static', filename='img/productos/' ~ p.imagen) }}" alt="{{ p.nombre }}">
+      {% else %}
+        <span aria-hidden="true">{{ p.nombre[0] }}</span>
+      {% endif %}
+    </div>
+    <span class="pendiente boton-editar" title="Próximamente">Editar Producto</span>
+    <h2>{{ p.nombre }}</h2>
+    <p class="precio">{{ p.valor | pesos }}</p>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">Aún no hay productos. Cuando exista la opción Crear Producto, aparecerán aquí.</p>
+{% endif %}
+{% endblock %}
