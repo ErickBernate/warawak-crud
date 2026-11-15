@@ -1,5 +1,6 @@
-"""Prototipo Warawak: login y listado de productos (Flask + SQLite)."""
+"""Prototipo Warawak: login, listado y creación de productos (Flask + SQLite)."""
 import os
+import uuid
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 from flask_login import (
@@ -16,6 +17,13 @@ from werkzeug.security import check_password_hash, generate_password_hash
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "cambia-esta-clave-en-produccion")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///warawak.db"
+app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024  # tope de toda la petición
+
+CARPETA_IMAGENES = os.path.join(app.static_folder, "img", "productos")
+os.makedirs(CARPETA_IMAGENES, exist_ok=True)
+EXTENSIONES_PERMITIDAS = {"png", "jpg", "jpeg", "webp", "gif"}
+MAX_IMAGEN_BYTES = 2 * 1024 * 1024
+MAX_VALOR = 100_000_000
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -85,6 +93,32 @@ with app.app_context():
     sembrar_datos()
 
 
+# ---------------------------------------------------------------- validaciones
+def interpretar_valor(texto):
+    """'12.000', '$ 12000' o '12000' -> 12000. Devuelve None si no es válido."""
+    limpio = texto.replace("$", "").replace(".", "").replace(",", "").replace(" ", "")
+    if not (limpio.isascii() and limpio.isdigit()):
+        return None
+    valor = int(limpio)
+    return valor if 0 < valor < MAX_VALOR else None
+
+
+def extension_de(nombre_archivo):
+    return nombre_archivo.rsplit(".", 1)[-1].lower() if "." in nombre_archivo else ""
+
+
+def validar_foto(foto):
+    """Devuelve un mensaje de error, o None si la foto es válida."""
+    if extension_de(foto.filename) not in EXTENSIONES_PERMITIDAS:
+        return "Formato no permitido. Usa PNG, JPG, WEBP o GIF."
+    foto.seek(0, os.SEEK_END)
+    tamano = foto.tell()
+    foto.seek(0)
+    if tamano > MAX_IMAGEN_BYTES:
+        return "La imagen pesa más de 2 MB. Elige una más liviana."
+    return None
+
+
 # ---------------------------------------------------------------- rutas
 @app.route("/")
 def raiz():
@@ -122,6 +156,71 @@ def logout():
 def inicio():
     productos = Producto.query.order_by(Producto.id).all()
     return render_template("inicio.html", productos=productos)
+
+
+@app.route("/productos/crear", methods=["GET", "POST"])
+@login_required
+def crear():
+    errores, datos = {}, {}
+
+    if request.method == "POST":
+        datos = {
+            campo: request.form.get(campo, "").strip()
+            for campo in ("nombre", "valor", "descripcion")
+        }
+
+        if not datos["nombre"]:
+            errores["nombre"] = "Escribe el nombre del producto."
+        elif len(datos["nombre"]) > 120:
+            errores["nombre"] = "El nombre admite hasta 120 caracteres."
+
+        valor = interpretar_valor(datos["valor"])
+        if valor is None:
+            errores["valor"] = (
+                "Escribe un valor mayor que cero y menor a 100.000.000, "
+                "solo con números (ejemplo: 12000 o 12.000)."
+            )
+
+        if len(datos["descripcion"]) > 500:
+            errores["descripcion"] = "La descripción admite hasta 500 caracteres."
+
+        foto = request.files.get("foto")
+        hay_foto = bool(foto and foto.filename)
+        if hay_foto:
+            error_foto = validar_foto(foto)
+            if error_foto:
+                errores["foto"] = error_foto
+
+        if not errores:
+            nombre_imagen = None
+            if hay_foto:
+                nombre_imagen = f"{uuid.uuid4().hex}.{extension_de(foto.filename)}"
+                foto.save(os.path.join(CARPETA_IMAGENES, nombre_imagen))
+
+            db.session.add(
+                Producto(
+                    nombre=datos["nombre"],
+                    valor=valor,
+                    descripcion=datos["descripcion"],
+                    imagen=nombre_imagen,
+                )
+            )
+            db.session.commit()
+            flash(f"Producto creado: {datos['nombre']}.", "success")
+            return redirect(url_for("inicio"))
+
+        if hay_foto:
+            flash("Revisa el formulario. Vuelve a elegir la foto, porque el navegador no la conserva.", "error")
+        else:
+            flash("Revisa los campos marcados e intenta de nuevo.", "error")
+
+    return render_template("crear.html", errores=errores, datos=datos)
+
+
+@app.errorhandler(413)
+def peticion_muy_grande(_error):
+    flash("La imagen supera el tamaño permitido (2 MB). Elige una más liviana.", "error")
+    return redirect(url_for("crear"))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,10 @@
+<nav class="menu" aria-label="Principal">
+  <a href="{{ url_for('inicio') }}" {% if request.endpoint == 'inicio' %}aria-current="page"{% endif %}>Inicio</a>
+  <a href="{{ url_for('crear') }}" {% if request.endpoint == 'crear' %}aria-current="page"{% endif %}>Crear Producto</a>
+  <span class="pendiente" title="Próximamente">Editar Producto</span>
+  <span class="pendiente" title="Próximamente">Eliminar Producto</span>
+</nav>
+<a class="salir" href="{{ url_for('logout') }}">
+  Salir
+  <svg width="18" height="22" viewBox="0 0 18 22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 21V1h8v20"/><path d="M1 21h8"/><path d="M9 11h8M14 7l4 4-4 4" transform="translate(-1 0)"/></svg>
+</a>
