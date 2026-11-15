@@ -89,12 +89,14 @@ a { color: inherit; }
 .producto-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .producto-foto span { font-size: 2.2rem; font-weight: 600; color: var(--turquesa); }
 .boton-editar {
-  margin-top: 8px; padding: 8px 14px;
-  background: var(--gris-boton); font-size: .95rem;
+  display: inline-block; margin-top: 8px; padding: 8px 14px;
+  background: var(--gris-boton); color: var(--tinta); font-size: .95rem; text-decoration: none;
 }
+a.boton-editar:hover { background: #a39e9e; }
 .producto h2 { font-size: .85rem; font-weight: 600; margin: 18px 0 4px; max-width: 170px; }
 .precio { margin: 0; font-size: .85rem; font-weight: 600; }
 .vacio { text-align: center; color: #555; }
+.titulo-pagina { font-size: 1.6rem; font-weight: 500; text-align: center; margin: 4px 0 28px; }
 
 /* login */
 .login { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 520px; }

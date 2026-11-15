@@ -1,0 +1,20 @@
+{% if productos %}
+<ul class="productos">
+  {% for p in productos %}
+  <li class="producto">
+    <div class="producto-foto">
+      {% if p.imagen %}
+        <img src="{{ url_for('static', filename='img/productos/' ~ p.imagen) }}" alt="{{ p.nombre }}">
+      {% else %}
+        <span aria-hidden="true">{{ p.nombre[0] }}</span>
+      {% endif %}
+    </div>
+    <a class="boton-editar" href="{{ url_for('editar_producto', producto_id=p.id) }}">Editar Producto<span class="solo-lectores">: {{ p.nombre }}</span></a>
+    <h2>{{ p.nombre }}</h2>
+    <p class="precio">{{ p.valor | pesos }}</p>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">Aún no hay productos. Crea el primero desde <a href="{{ url_for('crear') }}">Crear Producto</a>.</p>
+{% endif %}

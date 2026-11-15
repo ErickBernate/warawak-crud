@@ -8,24 +8,5 @@
 <div class="banner" role="img" aria-label="Interior del local Warawak"></div>
 <h1 class="bienvenida">Bienvenido {{ current_user.nombre }}</h1>
 
-{% if productos %}
-<ul class="productos">
-  {% for p in productos %}
-  <li class="producto">
-    <div class="producto-foto">
-      {% if p.imagen %}
-        <img src="{{ url_for('static', filename='img/productos/' ~ p.imagen) }}" alt="{{ p.nombre }}">
-      {% else %}
-        <span aria-hidden="true">{{ p.nombre[0] }}</span>
-      {% endif %}
-    </div>
-    <span class="pendiente boton-editar" title="Próximamente">Editar Producto</span>
-    <h2>{{ p.nombre }}</h2>
-    <p class="precio">{{ p.valor | pesos }}</p>
-  </li>
-  {% endfor %}
-</ul>
-{% else %}
-<p class="vacio">Aún no hay productos. Cuando exista la opción Crear Producto, aparecerán aquí.</p>
-{% endif %}
+{% include "_tarjetas.html" %}
 {% endblock %}

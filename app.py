@@ -1,4 +1,4 @@
-"""Prototipo Warawak: login, listado y creación de productos (Flask + SQLite)."""
+"""Prototipo Warawak: login, listado, creación y edición de productos (Flask + SQLite)."""
 import os
 import uuid
 
@@ -119,6 +119,65 @@ def validar_foto(foto):
     return None
 
 
+def leer_formulario():
+    """Lee y valida el formulario de producto (sirve para crear y para editar).
+
+    Devuelve (datos, errores, valor, foto). `foto` es None si no se eligió ninguna.
+    """
+    datos = {
+        campo: request.form.get(campo, "").strip()
+        for campo in ("nombre", "valor", "descripcion")
+    }
+    errores = {}
+
+    if not datos["nombre"]:
+        errores["nombre"] = "Escribe el nombre del producto."
+    elif len(datos["nombre"]) > 120:
+        errores["nombre"] = "El nombre admite hasta 120 caracteres."
+
+    valor = interpretar_valor(datos["valor"])
+    if valor is None:
+        errores["valor"] = (
+            "Escribe un valor mayor que cero y menor a 100.000.000, "
+            "solo con números (ejemplo: 12000 o 12.000)."
+        )
+
+    if len(datos["descripcion"]) > 500:
+        errores["descripcion"] = "La descripción admite hasta 500 caracteres."
+
+    foto = request.files.get("foto")
+    if not (foto and foto.filename):
+        foto = None
+    else:
+        error_foto = validar_foto(foto)
+        if error_foto:
+            errores["foto"] = error_foto
+
+    return datos, errores, valor, foto
+
+
+def avisar_errores(foto):
+    if foto is not None:
+        flash("Revisa el formulario. Vuelve a elegir la foto, porque el navegador no la conserva.", "error")
+    else:
+        flash("Revisa los campos marcados e intenta de nuevo.", "error")
+
+
+def guardar_foto(foto):
+    """Guarda la foto con un nombre aleatorio y devuelve ese nombre."""
+    nombre_imagen = f"{uuid.uuid4().hex}.{extension_de(foto.filename)}"
+    foto.save(os.path.join(CARPETA_IMAGENES, nombre_imagen))
+    return nombre_imagen
+
+
+def borrar_foto(nombre_imagen):
+    if not nombre_imagen:
+        return
+    ruta = os.path.join(CARPETA_IMAGENES, os.path.basename(nombre_imagen))
+    if os.path.isfile(ruta):
+        os.remove(ruta)
+
+
 # ---------------------------------------------------------------- rutas
 @app.route("/")
 def raiz():
@@ -164,63 +223,65 @@ def crear():
     errores, datos = {}, {}
 
     if request.method == "POST":
-        datos = {
-            campo: request.form.get(campo, "").strip()
-            for campo in ("nombre", "valor", "descripcion")
-        }
-
-        if not datos["nombre"]:
-            errores["nombre"] = "Escribe el nombre del producto."
-        elif len(datos["nombre"]) > 120:
-            errores["nombre"] = "El nombre admite hasta 120 caracteres."
-
-        valor = interpretar_valor(datos["valor"])
-        if valor is None:
-            errores["valor"] = (
-                "Escribe un valor mayor que cero y menor a 100.000.000, "
-                "solo con números (ejemplo: 12000 o 12.000)."
-            )
-
-        if len(datos["descripcion"]) > 500:
-            errores["descripcion"] = "La descripción admite hasta 500 caracteres."
-
-        foto = request.files.get("foto")
-        hay_foto = bool(foto and foto.filename)
-        if hay_foto:
-            error_foto = validar_foto(foto)
-            if error_foto:
-                errores["foto"] = error_foto
-
+        datos, errores, valor, foto = leer_formulario()
         if not errores:
-            nombre_imagen = None
-            if hay_foto:
-                nombre_imagen = f"{uuid.uuid4().hex}.{extension_de(foto.filename)}"
-                foto.save(os.path.join(CARPETA_IMAGENES, nombre_imagen))
-
             db.session.add(
                 Producto(
                     nombre=datos["nombre"],
                     valor=valor,
                     descripcion=datos["descripcion"],
-                    imagen=nombre_imagen,
+                    imagen=guardar_foto(foto) if foto else None,
                 )
             )
             db.session.commit()
             flash(f"Producto creado: {datos['nombre']}.", "success")
             return redirect(url_for("inicio"))
+        avisar_errores(foto)
 
-        if hay_foto:
-            flash("Revisa el formulario. Vuelve a elegir la foto, porque el navegador no la conserva.", "error")
-        else:
-            flash("Revisa los campos marcados e intenta de nuevo.", "error")
+    return render_template("producto_form.html", modo="crear", producto=None, errores=errores, datos=datos)
 
-    return render_template("crear.html", errores=errores, datos=datos)
+
+@app.route("/productos/editar")
+@login_required
+def elegir_edicion():
+    productos = Producto.query.order_by(Producto.id).all()
+    return render_template("editar_lista.html", productos=productos)
+
+
+@app.route("/productos/<int:producto_id>/editar", methods=["GET", "POST"])
+@login_required
+def editar_producto(producto_id):
+    producto = db.get_or_404(Producto, producto_id)
+    errores = {}
+    datos = {
+        "nombre": producto.nombre,
+        "valor": str(producto.valor),
+        "descripcion": producto.descripcion,
+    }
+
+    if request.method == "POST":
+        datos, errores, valor, foto = leer_formulario()
+        if not errores:
+            imagen_anterior = producto.imagen
+            producto.nombre = datos["nombre"]
+            producto.valor = valor
+            producto.descripcion = datos["descripcion"]
+            if foto:
+                producto.imagen = guardar_foto(foto)
+            db.session.commit()
+            if foto:
+                borrar_foto(imagen_anterior)
+            flash(f"Cambios guardados: {datos['nombre']}.", "success")
+            return redirect(url_for("inicio"))
+        avisar_errores(foto)
+
+    return render_template("producto_form.html", modo="editar", producto=producto, errores=errores, datos=datos)
 
 
 @app.errorhandler(413)
 def peticion_muy_grande(_error):
     flash("La imagen supera el tamaño permitido (2 MB). Elige una más liviana.", "error")
-    return redirect(url_for("crear"))
+    return redirect(request.url)
 
 
 if __name__ == "__main__":

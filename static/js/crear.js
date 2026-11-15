@@ -5,13 +5,21 @@
   var imagen = document.getElementById("vista-previa-imagen");
   var icono = document.getElementById("vista-previa-icono");
   var ayuda = document.getElementById("ayuda-foto");
-  var ayudaOriginal = ayuda.textContent;
+  var ayudaOriginal = ayuda.textContent.trim();
+  // Al editar, la foto actual ya viene cargada en la vista previa.
+  var srcOriginal = imagen.hidden ? null : imagen.getAttribute("src");
   var urlActual = null;
 
   function restaurar(mensaje) {
     entrada.value = "";
-    imagen.hidden = true;
-    icono.hidden = false;
+    if (srcOriginal) {
+      imagen.src = srcOriginal;
+      imagen.hidden = false;
+      icono.hidden = true;
+    } else {
+      imagen.hidden = true;
+      icono.hidden = false;
+    }
     ayuda.textContent = mensaje || ayudaOriginal;
   }
 
