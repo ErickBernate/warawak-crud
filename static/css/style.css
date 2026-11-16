@@ -198,6 +198,29 @@ a.boton-editar:hover { background: #a39e9e; }
 .crear .boton-crear { text-decoration: none; width: fit-content; }
 [readonly] { cursor: default; }
 
+
+/* crear cuenta */
+.login-registro a { color: inherit; text-decoration: none; }
+.login-registro a:hover { text-decoration: underline; }
+.grupo-registro { display: flex; flex-direction: column; gap: 6px; }
+.campo-requerido { position: relative; }
+.campo-requerido .campo { padding-right: 46px; }
+.campo-requerido .campo[aria-invalid="true"] { border-color: var(--rojo); }
+.asterisco { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-weight: 700; pointer-events: none; }
+.login-form .error { padding-left: 12px; }
+
+
+/* menú público */
+.menu-publico { margin-left: auto; margin-right: auto; }
+.acciones-cuenta { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+.acciones-cuenta .salir { margin-left: 0; }
+.icono-cuenta { display: grid; place-items: center; width: 44px; height: 36px; background: #f1f1f1; color: var(--tinta); }
+.icono-cuenta:hover { background: #e4e4e4; }
+.titulo-menu { margin: 14px 0 26px; font-size: 1.6rem; font-weight: 500; }
+.productos-publicos { align-items: start; }
+.productos-publicos .producto h2 { margin-top: 14px; }
+.producto .descripcion { margin: 8px 0 0; max-width: 180px; font-size: .8rem; line-height: 1.45; color: #555; white-space: pre-line; overflow-wrap: anywhere; }
+
 /* ---------- pie ---------- */
 .pie { background: var(--pie); color: #fff; margin: 0 auto; width: 100%; max-width: calc(var(--ancho) + 40px); }
 .pie-interno {
@@ -213,7 +236,7 @@ a.boton-editar:hover { background: #a39e9e; }
 /* ---------- pantallas pequeñas ---------- */
 @media (max-width: 760px) {
   .encabezado-interno { flex-wrap: wrap; gap: 12px 20px; }
-  .menu { margin-left: 0; order: 3; width: 100%; }
+  .menu, .menu-publico { margin-left: 0; margin-right: 0; order: 3; width: 100%; }
   .login { grid-template-columns: 1fr; }
   .login-foto { min-height: 220px; }
   .pie-interno { grid-template-columns: 1fr 1fr; }

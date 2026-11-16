@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block titulo %}Crear cuenta · Warawak{% endblock %}
+
+{% block menu %}{% include "_iconos_encabezado.html" %}{% endblock %}
+
+{% block contenido %}
+<section class="login">
+  <div class="login-foto" role="img" aria-label="Equipo de Warawak"></div>
+
+  <div class="login-panel">
+    <form method="post" class="login-form" novalidate>
+      <h1>Crear cuenta</h1>
+
+      {% with mensajes = get_flashed_messages(with_categories=true) %}
+        {% for categoria, mensaje in mensajes %}
+          <p class="aviso aviso-{{ categoria }}" role="{{ 'alert' if categoria == 'error' else 'status' }}">{{ mensaje }}</p>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="grupo-registro">
+        <label class="solo-lectores" for="nombre">Nombre (obligatorio)</label>
+        <div class="campo-requerido">
+          <input class="campo" type="text" id="nombre" name="nombre" placeholder="Nombre" maxlength="80"
+                 value="{{ datos.get('nombre', '') }}" autocomplete="username" required autofocus
+                 {% if errores.nombre %}aria-invalid="true" aria-describedby="error-nombre"{% endif %}>
+          <span class="asterisco" aria-hidden="true">*</span>
+        </div>
+        {% if errores.nombre %}<p class="error" id="error-nombre">{{ errores.nombre }}</p>{% endif %}
+      </div>
+
+      <div class="grupo-registro">
+        <label class="solo-lectores" for="contacto">Email o teléfono (obligatorio)</label>
+        <div class="campo-requerido">
+          <input class="campo" type="text" id="contacto" name="contacto" placeholder="Email o telefono" maxlength="120"
+                 value="{{ datos.get('contacto', '') }}" autocomplete="off" required
+                 {% if errores.contacto %}aria-invalid="true" aria-describedby="error-contacto"{% endif %}>
+          <span class="asterisco" aria-hidden="true">*</span>
+        </div>
+        {% if errores.contacto %}<p class="error" id="error-contacto">{{ errores.contacto }}</p>{% endif %}
+      </div>
+
+      <div class="grupo-registro">
+        <label class="solo-lectores" for="password">Contraseña (obligatoria, mínimo 8 caracteres)</label>
+        <div class="campo-requerido">
+          <input class="campo" type="password" id="password" name="password" placeholder="Contraseña" maxlength="128"
+                 autocomplete="new-password" required
+                 {% if errores.password %}aria-invalid="true" aria-describedby="error-password"{% endif %}>
+          <span class="asterisco" aria-hidden="true">*</span>
+        </div>
+        {% if errores.password %}<p class="error" id="error-password">{{ errores.password }}</p>{% endif %}
+      </div>
+
+      <button type="submit" class="boton-ingresar">Crear Cuenta</button>
+      <p class="login-registro">Ya tienes Cuenta? <a href="{{ url_for('login') }}"><strong>Inicia</strong> Sesion aqui</a></p>
+    </form>
+  </div>
+</section>
+{% endblock %}

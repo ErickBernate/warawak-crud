@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block titulo %}Menú Digital · Warawak{% endblock %}
+
+{% block menu %}
+<nav class="menu menu-publico" aria-label="Principal">
+  <a href="{{ url_for('raiz') }}" aria-current="page">Inicio</a>
+  <a href="#soporte">Contacto</a>
+  <span class="pendiente" title="Próximamente">Acerca de</span>
+  {% if current_user.is_authenticated %}
+    <a href="{{ url_for('inicio') }}">Panel de administración</a>
+  {% else %}
+    <a href="{{ url_for('registro') }}">Regístrate</a>
+  {% endif %}
+</nav>
+
+<div class="acciones-cuenta">
+  {% if current_user.is_authenticated %}
+    <a class="icono-cuenta" href="{{ url_for('inicio') }}" aria-label="Ir al panel de administración">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4 21v-1.5A5.5 5.5 0 0 1 9.5 14h5a5.5 5.5 0 0 1 5.5 5.5V21"/></svg>
+    </a>
+    <a class="salir" href="{{ url_for('logout') }}">Salir</a>
+  {% else %}
+    <a class="icono-cuenta" href="{{ url_for('login') }}" aria-label="Iniciar sesión">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4 21v-1.5A5.5 5.5 0 0 1 9.5 14h5a5.5 5.5 0 0 1 5.5 5.5V21"/></svg>
+    </a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block contenido %}
+<div class="banner" role="img" aria-label="Interior del local Warawak"></div>
+<h1 class="titulo-menu">Menú Digital</h1>
+
+{% if productos %}
+<ul class="productos productos-publicos">
+  {% for p in productos %}
+  <li class="producto">
+    <div class="producto-foto">
+      {% if p.imagen %}
+        <img src="{{ url_for('static', filename='img/productos/' ~ p.imagen) }}" alt="{{ p.nombre }}">
+      {% else %}
+        <span aria-hidden="true">{{ p.nombre[0] }}</span>
+      {% endif %}
+    </div>
+    <h2>{{ p.nombre }}</h2>
+    <p class="precio">{{ p.valor | pesos }}</p>
+    {% if p.descripcion %}<p class="descripcion">{{ p.descripcion }}</p>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">Pronto publicaremos nuestro menú.</p>
+{% endif %}
+{% endblock %}
