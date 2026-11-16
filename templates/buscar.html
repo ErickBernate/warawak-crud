@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titulo %}{{ 'Editar' if accion == 'editar' else 'Eliminar' }} producto · Warawak{% endblock %}
+{% block menu %}{% include "_menu.html" %}{% endblock %}
+
+{% block contenido %}
+<h1 class="solo-lectores">{{ 'Editar' if accion == 'editar' else 'Eliminar' }} producto</h1>
+{% include "_avisos.html" %}
+{% include "_buscador.html" %}
+
+{% if panel %}{% include "_panel.html" %}{% endif %}
+
+{% if productos %}
+<p class="titulo-lista">Hay {{ productos | length }} productos con ese nombre. Elige uno:</p>
+{% include "_tarjetas.html" %}
+{% endif %}
+{% endblock %}

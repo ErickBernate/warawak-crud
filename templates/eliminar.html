@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block titulo %}Eliminar producto · Warawak{% endblock %}
+{% block menu %}{% include "_menu.html" %}{% endblock %}
+
+{% block contenido %}
+<h1 class="solo-lectores">Eliminar producto</h1>
+
+<div {% if confirmar %}inert{% endif %}>
+  {% with accion='eliminar', q_valor=producto.nombre %}{% include "_buscador.html" %}{% endwith %}
+
+  <div class="crear">
+    <div class="crear-grid">
+      <div class="crear-campos">
+        <div class="grupo">
+          <label for="d-nombre">Nombre</label>
+          <input class="campo" type="text" id="d-nombre" value="{{ producto.nombre }}" readonly>
+        </div>
+        <div class="grupo">
+          <label for="d-valor">Valor</label>
+          <div class="campo-moneda">
+            <span aria-hidden="true">$</span>
+            <input type="text" id="d-valor" value="{{ producto.valor | miles }}" readonly>
+          </div>
+        </div>
+        <div class="grupo">
+          <label for="d-descripcion">Descripción</label>
+          <textarea class="campo campo-area" id="d-descripcion" rows="4" readonly>{{ producto.descripcion }}</textarea>
+        </div>
+      </div>
+
+      <div class="crear-foto">
+        <div class="vista-previa">
+          {% if producto.imagen %}
+            <img src="{{ url_for('static', filename='img/productos/' ~ producto.imagen) }}" alt="Foto de {{ producto.nombre }}">
+          {% else %}
+            <svg viewBox="0 0 424 300" role="img" aria-label="Este producto no tiene foto">
+              <rect width="424" height="300" fill="#12507F"/>
+              <circle cx="104" cy="75" r="40" fill="#fff"/>
+              <path d="M66 242 L166 142 L214 190 L262 100 L378 242 Z" fill="#fff"/>
+            </svg>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <a class="boton-rojo boton-crear" href="{{ url_for('eliminar_producto', producto_id=producto.id, confirmar=1) }}">Eliminar Producto</a>
+  </div>
+</div>
+
+{% if confirmar %}
+<div class="modal-fondo">
+  <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="modal-titulo">
+    <p id="modal-titulo">¿Está seguro de que desea eliminar «{{ producto.nombre }}»? Esta acción no se puede deshacer.</p>
+    <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 22.5 21h-21z" fill="#F2C037" stroke="#1d1d1f" stroke-width="1.4" stroke-linejoin="round"/><path d="M12 9v5.5" stroke="#1d1d1f" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.2" fill="#1d1d1f"/></svg>
+    <div class="modal-botones">
+      <form method="post" action="{{ url_for('eliminar_producto', producto_id=producto.id) }}">
+        <button type="submit" class="boton-amarillo">Sí</button>
+      </form>
+      <a class="boton-amarillo" href="{{ url_for('eliminar_producto', producto_id=producto.id) }}" autofocus>No</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

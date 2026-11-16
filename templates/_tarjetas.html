@@ -9,7 +9,8 @@
         <span aria-hidden="true">{{ p.nombre[0] }}</span>
       {% endif %}
     </div>
-    <a class="boton-editar" href="{{ url_for('editar_producto', producto_id=p.id) }}">Editar Producto<span class="solo-lectores">: {{ p.nombre }}</span></a>
+    {% set eliminando = (accion == 'eliminar') %}
+    <a class="boton-editar" href="{{ url_for('eliminar_producto' if eliminando else 'editar_producto', producto_id=p.id) }}">{{ 'Eliminar Producto' if eliminando else 'Editar Producto' }}<span class="solo-lectores">: {{ p.nombre }}</span></a>
     <h2>{{ p.nombre }}</h2>
     <p class="precio">{{ p.valor | pesos }}</p>
   </li>

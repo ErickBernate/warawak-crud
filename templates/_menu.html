@@ -1,8 +1,8 @@
 <nav class="menu" aria-label="Principal">
   <a href="{{ url_for('inicio') }}" {% if request.endpoint == 'inicio' %}aria-current="page"{% endif %}>Inicio</a>
   <a href="{{ url_for('crear') }}" {% if request.endpoint == 'crear' %}aria-current="page"{% endif %}>Crear Producto</a>
-  <a href="{{ url_for('elegir_edicion') }}" {% if request.endpoint in ('elegir_edicion', 'editar_producto') %}aria-current="page"{% endif %}>Editar Producto</a>
-  <span class="pendiente" title="Próximamente">Eliminar Producto</span>
+  <a href="{{ url_for('editar_buscar') }}" {% if request.endpoint in ('editar_buscar', 'editar_producto') %}aria-current="page"{% endif %}>Editar Producto</a>
+  <a href="{{ url_for('eliminar_buscar') }}" {% if request.endpoint in ('eliminar_buscar', 'eliminar_producto') %}aria-current="page"{% endif %}>Eliminar Producto</a>
 </nav>
 <a class="salir" href="{{ url_for('logout') }}">
   Salir

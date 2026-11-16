@@ -1,5 +1,7 @@
-"""Prototipo Warawak: login, listado, creación y edición de productos (Flask + SQLite)."""
+"""Prototipo Warawak: login, listado, creación, edición y eliminación de productos (Flask + SQLite)."""
 import os
+import re
+import unicodedata
 import uuid
 
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -60,6 +62,12 @@ def cargar_usuario(user_id):
 def formato_pesos(valor):
     """5500 -> '$ 5.500'"""
     return "$ " + f"{valor:,}".replace(",", ".")
+
+
+@app.template_filter("miles")
+def formato_miles(valor):
+    """12000 -> '12.000'"""
+    return f"{valor:,}".replace(",", ".")
 
 
 # ---------------------------------------------------------------- datos de ejemplo
@@ -178,6 +186,57 @@ def borrar_foto(nombre_imagen):
         os.remove(ruta)
 
 
+def normalizar(texto):
+    """Minúsculas, sin tildes ni signos: 'Sándwich-Jamón Pavo' -> 'sandwich jamon pavo'."""
+    sin_tildes = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", " ", sin_tildes.lower()).strip()
+
+
+def buscar_productos(consulta):
+    """Coincidencia exacta de nombre si existe; si no, nombres que contengan el texto."""
+    buscado = normalizar(consulta)
+    if not buscado:
+        return []
+    todos = Producto.query.order_by(Producto.id).all()
+    exactos = [p for p in todos if normalizar(p.nombre) == buscado]
+    return exactos or [p for p in todos if buscado in normalizar(p.nombre)]
+
+
+PANELES = {
+    "no_encontrado": "No se encontró el Producto",
+    "eliminado": "Producto eliminado correctamente",
+}
+
+
+def pantalla_busqueda(accion):
+    """Búsqueda por nombre, compartida por Editar y Eliminar."""
+    consulta = request.args.get("q")
+    panel = PANELES.get(request.args.get("resultado"))
+    error = None
+    encontrados = []
+
+    if consulta is not None:
+        consulta = consulta.strip()
+        if not normalizar(consulta):
+            error = "Escribe el nombre del producto que buscas."
+        else:
+            encontrados = buscar_productos(consulta)
+            if len(encontrados) == 1:
+                destino = "editar_producto" if accion == "editar" else "eliminar_producto"
+                return redirect(url_for(destino, producto_id=encontrados[0].id))
+            if not encontrados:
+                panel = PANELES["no_encontrado"]
+
+    return render_template(
+        "buscar.html",
+        accion=accion,
+        q_valor=consulta or "",
+        error=error,
+        panel=panel,
+        productos=encontrados,
+    )
+
+
 # ---------------------------------------------------------------- rutas
 @app.route("/")
 def raiz():
@@ -243,15 +302,22 @@ def crear():
 
 @app.route("/productos/editar")
 @login_required
-def elegir_edicion():
-    productos = Producto.query.order_by(Producto.id).all()
-    return render_template("editar_lista.html", productos=productos)
+def editar_buscar():
+    return pantalla_busqueda("editar")
+
+
+@app.route("/productos/eliminar")
+@login_required
+def eliminar_buscar():
+    return pantalla_busqueda("eliminar")
 
 
 @app.route("/productos/<int:producto_id>/editar", methods=["GET", "POST"])
 @login_required
 def editar_producto(producto_id):
-    producto = db.get_or_404(Producto, producto_id)
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        return redirect(url_for("editar_buscar", resultado="no_encontrado"))
     errores = {}
     datos = {
         "nombre": producto.nombre,
@@ -276,6 +342,27 @@ def editar_producto(producto_id):
         avisar_errores(foto)
 
     return render_template("producto_form.html", modo="editar", producto=producto, errores=errores, datos=datos)
+
+
+@app.route("/productos/<int:producto_id>/eliminar", methods=["GET", "POST"])
+@login_required
+def eliminar_producto(producto_id):
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        return redirect(url_for("eliminar_buscar", resultado="no_encontrado"))
+
+    if request.method == "POST":
+        imagen = producto.imagen
+        db.session.delete(producto)
+        db.session.commit()
+        borrar_foto(imagen)
+        return redirect(url_for("eliminar_buscar", resultado="eliminado"))
+
+    return render_template(
+        "eliminar.html",
+        producto=producto,
+        confirmar=request.args.get("confirmar") == "1",
+    )
 
 
 @app.errorhandler(413)

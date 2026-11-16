@@ -6,6 +6,7 @@
 {% block contenido %}
 <h1 class="solo-lectores">{{ 'Editar producto' if editando else 'Crear producto' }}</h1>
 {% include "_avisos.html" %}
+{% if editando %}{% with accion='editar', q_valor=producto.nombre %}{% include "_buscador.html" %}{% endwith %}{% endif %}
 
 <form method="post" enctype="multipart/form-data" class="crear" novalidate>
   <div class="crear-grid">

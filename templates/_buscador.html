@@ -1,0 +1,12 @@
+<form class="buscador" method="get" action="{{ url_for(accion ~ '_buscar') }}" role="search">
+  <label for="q">{{ 'Buscar Producto' if accion == 'editar' else 'Buscar Producto a eliminar' }}</label>
+  <div class="buscador-campo">
+    <input type="search" id="q" name="q" value="{{ q_valor }}" maxlength="120" autocomplete="off"
+           {% if error %}aria-invalid="true" aria-describedby="error-q"{% endif %}>
+    <span class="buscador-icono" aria-hidden="true">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><path d="M15.5 15.5 21 21"/></svg>
+    </span>
+  </div>
+  {% if error %}<p class="error" id="error-q">{{ error }}</p>{% endif %}
+  <button type="submit" class="boton-rojo boton-buscar">Buscar</button>
+</form>

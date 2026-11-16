@@ -157,7 +157,46 @@ a.boton-editar:hover { background: #a39e9e; }
   font: inherit; font-size: 1.35rem; font-weight: 600; letter-spacing: .03em; cursor: pointer;
 }
 .boton-rojo:hover { background: #ac2f2f; }
-.boton-crear { display: block; margin: 48px auto 0; padding: 10px 28px; }
+.boton-crear { display: block; margin: 48px auto 0; padding: 10px 28px; text-align: center; }
+
+
+/* buscar, mensajes y confirmación */
+.buscador { width: 100%; max-width: 346px; margin: 8px auto 40px; display: flex; flex-direction: column; gap: 8px; }
+.buscador label { font-size: .95rem; padding-left: 8px; }
+.buscador-campo { position: relative; }
+.buscador-campo input {
+  width: 100%; height: 46px; padding: 0 56px 0 20px;
+  border: 2px solid transparent; border-radius: 23px; background: var(--campo);
+  font: inherit; font-size: .95rem; color: var(--tinta);
+}
+.buscador-campo input:focus-visible { border-color: var(--azul); outline: none; }
+.buscador-campo input[aria-invalid="true"] { border-color: var(--rojo); }
+.buscador-icono { position: absolute; right: 8px; top: 7px; width: 36px; height: 32px; display: grid; place-items: center; background: #fff; color: var(--tinta); }
+.boton-buscar { align-self: center; width: 230px; margin-top: 14px; padding: 8px 0; }
+
+.panel-mensaje {
+  width: 100%; max-width: 457px; min-height: 200px; margin: 0 auto 32px; padding: 56px 24px 24px;
+  background: var(--panel); display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center;
+}
+.panel-mensaje p { margin: 0; font-size: 1.05rem; }
+.boton-ok { padding: 4px 38px; background: #f3f2ee; color: var(--tinta); text-decoration: none; }
+.boton-ok:hover { background: #e4e2db; }
+.titulo-lista { text-align: center; margin: 0 0 28px; }
+
+.modal-fondo { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .28); }
+.modal {
+  width: 100%; max-width: 457px; padding: 40px 28px 32px; background: var(--panel);
+  display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center;
+}
+.modal p { margin: 0; font-size: 1.05rem; }
+.modal-botones { display: flex; gap: 36px; }
+.boton-amarillo {
+  min-width: 112px; padding: 6px 20px; border: 0; background: #F2C037; color: var(--tinta);
+  font: inherit; font-size: 1rem; text-align: center; text-decoration: none; cursor: pointer;
+}
+.boton-amarillo:hover { background: #dfae25; }
+.crear .boton-crear { text-decoration: none; width: fit-content; }
+[readonly] { cursor: default; }
 
 /* ---------- pie ---------- */
 .pie { background: var(--pie); color: #fff; margin: 0 auto; width: 100%; max-width: calc(var(--ancho) + 40px); }
