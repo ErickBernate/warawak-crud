@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titulo %}Sin permiso · Warawak{% endblock %}
+
+{% block menu %}
+<div class="acciones-cuenta">
+  {% if current_user.is_authenticated %}<a class="salir" href="{{ url_for('logout') }}">Salir</a>{% endif %}
+</div>
+{% endblock %}
+
+{% block contenido %}
+<h1 class="solo-lectores">Sin permiso</h1>
+<div class="panel-mensaje" role="alert">
+  <p>Esta sección es solo para administradores.</p>
+  <a class="boton-ok" href="{{ url_for('raiz') }}">Volver al menú</a>
+</div>
+{% endblock %}

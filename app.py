@@ -4,8 +4,9 @@ import re
 import unicodedata
 import uuid
 from datetime import datetime, timezone
+from functools import wraps
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, url_for
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -23,6 +24,8 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "cambia-esta-clave-en-produccion")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///warawak.db"
 app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024  # tope de toda la petición
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # el navegador no envía la sesión desde otros sitios
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 CARPETA_IMAGENES = os.path.join(app.static_folder, "img", "productos")
 os.makedirs(CARPETA_IMAGENES, exist_ok=True)
@@ -41,7 +44,12 @@ class Usuario(UserMixin, db.Model):
     nombre = db.Column(db.String(80), unique=True, nullable=False)
     contacto = db.Column(db.String(120), unique=True, nullable=True)  # correo o teléfono
     password_hash = db.Column(db.String(255), nullable=False)
+    rol = db.Column(db.String(20), nullable=False, default="cliente")  # "cliente" o "admin"
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def es_admin(self):
+        return self.rol == "admin"
 
     def poner_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -76,8 +84,6 @@ def formato_miles(valor):
 
 
 # ---------------------------------------------------------------- datos de ejemplo
-USUARIO_DEMO = ("Fulanito Perez", "warawak")
-
 PRODUCTOS_INICIALES = [
     ("Fresas con crema", 5500),
     ("Milo Caliente", 5000),
@@ -91,10 +97,7 @@ PRODUCTOS_INICIALES = [
 
 
 def sembrar_datos():
-    if Usuario.query.count() == 0:
-        usuario = Usuario(nombre=USUARIO_DEMO[0])
-        usuario.poner_password(USUARIO_DEMO[1])
-        db.session.add(usuario)
+    """Solo productos de ejemplo. Los administradores se crean con `python crear_admin.py`."""
     if Producto.query.count() == 0:
         for nombre, valor in PRODUCTOS_INICIALES:
             db.session.add(Producto(nombre=nombre, valor=valor))
@@ -110,12 +113,30 @@ def migrar_usuarios():
             conexion.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_contacto ON usuario (contacto)"))
         if "creado_en" not in columnas:
             conexion.execute(text("ALTER TABLE usuario ADD COLUMN creado_en DATETIME"))
+        if "rol" not in columnas:
+            conexion.execute(text("ALTER TABLE usuario ADD COLUMN rol VARCHAR(20) NOT NULL DEFAULT 'cliente'"))
 
 
 with app.app_context():
     db.create_all()
     migrar_usuarios()
     sembrar_datos()
+
+
+def admin_requerido(vista):
+    """Solo administradores. Sin sesión -> login; cliente con sesión -> 403."""
+    @login_required
+    @wraps(vista)
+    def envoltura(*args, **kwargs):
+        if not current_user.es_admin:
+            abort(403)
+        return vista(*args, **kwargs)
+
+    return envoltura
+
+
+def destino_tras_login(usuario):
+    return url_for("inicio") if usuario.es_admin else url_for("raiz")
 
 
 # ---------------------------------------------------------------- validaciones
@@ -291,7 +312,7 @@ def raiz():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("inicio"))
+        return redirect(destino_tras_login(current_user))
 
     if request.method == "POST":
         nombre = limpiar_nombre(request.form.get("nombre", ""))
@@ -299,7 +320,7 @@ def login():
         usuario = usuario_por_nombre(nombre) if nombre else None
         if usuario and usuario.verificar_password(password):
             login_user(usuario)
-            return redirect(url_for("inicio"))
+            return redirect(destino_tras_login(usuario))
         flash("El nombre o la contraseña no coinciden. Revisa los datos e intenta de nuevo.", "error")
 
     return render_template("login.html")
@@ -308,7 +329,7 @@ def login():
 @app.route("/registro", methods=["GET", "POST"])
 def registro():
     if current_user.is_authenticated:
-        return redirect(url_for("inicio"))
+        return redirect(destino_tras_login(current_user))
 
     errores, datos = {}, {}
     if request.method == "POST":
@@ -335,7 +356,7 @@ def registro():
             errores["password"] = "La contraseña admite hasta 128 caracteres."
 
         if not errores:
-            usuario = Usuario(nombre=nombre, contacto=contacto)
+            usuario = Usuario(nombre=nombre, contacto=contacto, rol="cliente")  # nunca se toma de la web
             usuario.poner_password(password)
             db.session.add(usuario)
             try:
@@ -360,14 +381,14 @@ def logout():
 
 
 @app.route("/inicio")
-@login_required
+@admin_requerido
 def inicio():
     productos = Producto.query.order_by(Producto.id).all()
     return render_template("inicio.html", productos=productos)
 
 
 @app.route("/productos/crear", methods=["GET", "POST"])
-@login_required
+@admin_requerido
 def crear():
     errores, datos = {}, {}
 
@@ -391,19 +412,19 @@ def crear():
 
 
 @app.route("/productos/editar")
-@login_required
+@admin_requerido
 def editar_buscar():
     return pantalla_busqueda("editar")
 
 
 @app.route("/productos/eliminar")
-@login_required
+@admin_requerido
 def eliminar_buscar():
     return pantalla_busqueda("eliminar")
 
 
 @app.route("/productos/<int:producto_id>/editar", methods=["GET", "POST"])
-@login_required
+@admin_requerido
 def editar_producto(producto_id):
     producto = db.session.get(Producto, producto_id)
     if producto is None:
@@ -435,7 +456,7 @@ def editar_producto(producto_id):
 
 
 @app.route("/productos/<int:producto_id>/eliminar", methods=["GET", "POST"])
-@login_required
+@admin_requerido
 def eliminar_producto(producto_id):
     producto = db.session.get(Producto, producto_id)
     if producto is None:
@@ -453,6 +474,11 @@ def eliminar_producto(producto_id):
         producto=producto,
         confirmar=request.args.get("confirmar") == "1",
     )
+
+
+@app.errorhandler(403)
+def sin_permiso(_error):
+    return render_template("403.html"), 403
 
 
 @app.errorhandler(413)

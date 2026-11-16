@@ -216,6 +216,7 @@ a.boton-editar:hover { background: #a39e9e; }
 .acciones-cuenta .salir { margin-left: 0; }
 .icono-cuenta { display: grid; place-items: center; width: 44px; height: 36px; background: #f1f1f1; color: var(--tinta); }
 .icono-cuenta:hover { background: #e4e4e4; }
+.saludo { font-size: .95rem; }
 .titulo-menu { margin: 14px 0 26px; font-size: 1.6rem; font-weight: 500; }
 .productos-publicos { align-items: start; }
 .productos-publicos .producto h2 { margin-top: 14px; }
