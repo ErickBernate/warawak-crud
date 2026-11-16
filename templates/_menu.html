@@ -4,7 +4,4 @@
   <a href="{{ url_for('editar_buscar') }}" {% if request.endpoint in ('editar_buscar', 'editar_producto') %}aria-current="page"{% endif %}>Editar Producto</a>
   <a href="{{ url_for('eliminar_buscar') }}" {% if request.endpoint in ('eliminar_buscar', 'eliminar_producto') %}aria-current="page"{% endif %}>Eliminar Producto</a>
 </nav>
-<a class="salir" href="{{ url_for('logout') }}">
-  Salir
-  <svg width="18" height="22" viewBox="0 0 18 22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 21V1h8v20"/><path d="M1 21h8"/><path d="M9 11h8M14 7l4 4-4 4" transform="translate(-1 0)"/></svg>
-</a>
+{% include "_salir.html" %}

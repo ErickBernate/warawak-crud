@@ -9,6 +9,7 @@
 {% if editando %}{% with accion='editar', q_valor=producto.nombre %}{% include "_buscador.html" %}{% endwith %}{% endif %}
 
 <form method="post" enctype="multipart/form-data" class="crear" novalidate>
+  {% include "_csrf.html" %}
   <div class="crear-grid">
     <div class="crear-campos">
       <div class="grupo">

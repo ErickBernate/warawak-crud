@@ -33,6 +33,23 @@ python app.py
 
 Abre http://127.0.0.1:5000 en el navegador.
 
+Para desarrollar con recarga automática de cambios (nunca en un servidor público):
+
+```
+$env:FLASK_DEBUG="1"
+python app.py
+```
+
+## Seguridad y configuración
+
+- **Clave secreta (`SECRET_KEY`):** firma las sesiones y no está escrita en el código.
+  En un servidor, defínela como variable de entorno. Para generar una:
+  `python -c "import secrets; print(secrets.token_hex(32))"`.
+  Si no existe la variable, la app crea una clave aleatoria en `instance/secret_key`, que no va al repositorio.
+- **Protección CSRF:** todos los formularios POST (incluido "Salir") llevan un token de verificación.
+- **HTTPS:** en un sitio publicado con HTTPS, define `SESSION_COOKIE_SECURE=1` para que la sesión solo viaje cifrada.
+- **Modo desarrollo:** apagado por defecto. Se activa solo con `FLASK_DEBUG=1`.
+
 ## Otros scripts
 
 - `python restablecer_password.py`: asigna una contraseña nueva a un usuario.

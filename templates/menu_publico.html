@@ -18,10 +18,10 @@
     <a class="icono-cuenta" href="{{ url_for('inicio') }}" aria-label="Ir al panel de administración">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4 21v-1.5A5.5 5.5 0 0 1 9.5 14h5a5.5 5.5 0 0 1 5.5 5.5V21"/></svg>
     </a>
-    <a class="salir" href="{{ url_for('logout') }}">Salir</a>
+    {% include "_salir.html" %}
   {% elif current_user.is_authenticated %}
     <span class="saludo">Hola, {{ current_user.nombre }}</span>
-    <a class="salir" href="{{ url_for('logout') }}">Salir</a>
+    {% include "_salir.html" %}
   {% else %}
     <a class="icono-cuenta" href="{{ url_for('login') }}" aria-label="Iniciar sesión">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4 21v-1.5A5.5 5.5 0 0 1 9.5 14h5a5.5 5.5 0 0 1 5.5 5.5V21"/></svg>

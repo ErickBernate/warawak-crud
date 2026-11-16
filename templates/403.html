@@ -3,7 +3,7 @@
 
 {% block menu %}
 <div class="acciones-cuenta">
-  {% if current_user.is_authenticated %}<a class="salir" href="{{ url_for('logout') }}">Salir</a>{% endif %}
+  {% if current_user.is_authenticated %}{% include "_salir.html" %}{% endif %}
 </div>
 {% endblock %}
 

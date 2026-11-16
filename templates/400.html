@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block titulo %}No se pudo verificar · Warawak{% endblock %}
+
+{% block contenido %}
+<h1 class="solo-lectores">No se pudo verificar el formulario</h1>
+<div class="panel-mensaje" role="alert">
+  <p>No pudimos verificar este formulario. Vuelve al menú, recarga la página e inténtalo de nuevo.</p>
+  <a class="boton-ok" href="{{ url_for('raiz') }}">Volver al menú</a>
+</div>
+{% endblock %}

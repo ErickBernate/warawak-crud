@@ -1,6 +1,7 @@
 """Prototipo Warawak: login, cuentas de usuario, listado, creación, edición y eliminación de productos (Flask + SQLite)."""
 import os
 import re
+import secrets
 import unicodedata
 import uuid
 from datetime import datetime, timezone
@@ -16,16 +17,49 @@ from flask_login import (
     logout_user,
 )
 from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "cambia-esta-clave-en-produccion")
+
+
+def obtener_secret_key():
+    """Clave que firma las sesiones.
+
+    1) Variable de entorno SECRET_KEY (lo recomendado en un servidor).
+    2) Si no existe, una clave aleatoria guardada en instance/secret_key, fuera de Git.
+    Nunca queda escrita en el código.
+    """
+    clave = os.environ.get("SECRET_KEY")
+    if clave:
+        return clave
+    os.makedirs(app.instance_path, exist_ok=True)
+    ruta = os.path.join(app.instance_path, "secret_key")
+    if os.path.isfile(ruta):
+        with open(ruta, encoding="utf-8") as archivo:
+            clave = archivo.read().strip()
+        if len(clave) >= 32:
+            return clave
+    clave = secrets.token_hex(32)
+    with open(ruta, "w", encoding="utf-8") as archivo:
+        archivo.write(clave)
+    try:
+        os.chmod(ruta, 0o600)
+    except OSError:
+        pass
+    return clave
+
+
+app.config["SECRET_KEY"] = obtener_secret_key()
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///warawak.db"
 app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024  # tope de toda la petición
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # el navegador no envía la sesión desde otros sitios
 app.config["SESSION_COOKIE_HTTPONLY"] = True
+# En un sitio con HTTPS, define la variable de entorno SESSION_COOKIE_SECURE=1
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE") == "1"
+app.config["WTF_CSRF_TIME_LIMIT"] = None  # el token vale mientras dure la sesión
 
 CARPETA_IMAGENES = os.path.join(app.static_folder, "img", "productos")
 os.makedirs(CARPETA_IMAGENES, exist_ok=True)
@@ -33,6 +67,7 @@ EXTENSIONES_PERMITIDAS = {"png", "jpg", "jpeg", "webp", "gif"}
 MAX_IMAGEN_BYTES = 2 * 1024 * 1024
 MAX_VALOR = 100_000_000
 
+csrf = CSRFProtect(app)  # exige token en todos los formularios POST
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
@@ -81,6 +116,14 @@ def formato_pesos(valor):
 def formato_miles(valor):
     """12000 -> '12.000'"""
     return f"{valor:,}".replace(",", ".")
+
+
+@app.after_request
+def cabeceras_de_seguridad(respuesta):
+    respuesta.headers.setdefault("X-Content-Type-Options", "nosniff")
+    respuesta.headers.setdefault("X-Frame-Options", "DENY")  # evita que otro sitio la muestre en un iframe
+    respuesta.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return respuesta
 
 
 # ---------------------------------------------------------------- datos de ejemplo
@@ -373,7 +416,7 @@ def registro():
     return render_template("registro.html", errores=errores, datos=datos)
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 @login_required
 def logout():
     logout_user()
@@ -476,6 +519,11 @@ def eliminar_producto(producto_id):
     )
 
 
+@app.errorhandler(CSRFError)
+def csrf_invalido(_error):
+    return render_template("400.html"), 400
+
+
 @app.errorhandler(403)
 def sin_permiso(_error):
     return render_template("403.html"), 403
@@ -488,4 +536,5 @@ def peticion_muy_grande(_error):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Para desarrollar con recarga automática: $env:FLASK_DEBUG="1"  (nunca en un servidor público)
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")

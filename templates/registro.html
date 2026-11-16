@@ -9,6 +9,7 @@
 
   <div class="login-panel">
     <form method="post" class="login-form" novalidate>
+      {% include "_csrf.html" %}
       <h1>Crear cuenta</h1>
 
       {% with mensajes = get_flashed_messages(with_categories=true) %}

@@ -1,0 +1,7 @@
+<form method="post" action="{{ url_for('logout') }}" class="form-salir">
+  {% include "_csrf.html" %}
+  <button type="submit" class="salir">
+    Salir
+    <svg width="18" height="22" viewBox="0 0 18 22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 21V1h8v20"/><path d="M1 21h8"/><path d="M9 11h8M14 7l4 4-4 4" transform="translate(-1 0)"/></svg>
+  </button>
+</form>
