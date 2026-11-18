@@ -1,0 +1,27 @@
+<nav class="menu menu-publico" aria-label="Principal">
+  <a href="{{ url_for('raiz') }}" {% if request.endpoint == 'raiz' %}aria-current="page"{% endif %}>Inicio</a>
+  <a href="{{ url_for('raiz') }}#soporte">Contacto</a>
+  <span class="pendiente" title="Próximamente">Acerca de</span>
+  {% if current_user.is_authenticated and current_user.es_admin %}
+    <a href="{{ url_for('inicio') }}">Panel de administración</a>
+  {% elif not current_user.is_authenticated %}
+    <a href="{{ url_for('registro') }}">Regístrate</a>
+  {% endif %}
+</nav>
+
+<div class="acciones-cuenta">
+  {% if mostrar_carrito %}{% include "_carrito_icono.html" %}{% endif %}
+  {% if current_user.is_authenticated and current_user.es_admin %}
+    <a class="icono-cuenta" href="{{ url_for('inicio') }}" aria-label="Ir al panel de administración">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4 21v-1.5A5.5 5.5 0 0 1 9.5 14h5a5.5 5.5 0 0 1 5.5 5.5V21"/></svg>
+    </a>
+    {% include "_salir.html" %}
+  {% elif current_user.is_authenticated %}
+    <span class="saludo">Hola, {{ current_user.nombre }}</span>
+    {% include "_salir.html" %}
+  {% else %}
+    <a class="icono-cuenta" href="{{ url_for('login') }}" aria-label="Iniciar sesión">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4 21v-1.5A5.5 5.5 0 0 1 9.5 14h5a5.5 5.5 0 0 1 5.5 5.5V21"/></svg>
+    </a>
+  {% endif %}
+</div>

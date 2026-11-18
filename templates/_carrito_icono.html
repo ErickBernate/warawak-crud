@@ -1,0 +1,5 @@
+<a class="icono-cuenta icono-carrito" href="{{ url_for('carrito') }}"
+   aria-label="Carrito de compras{% if carrito_unidades %}, {{ carrito_unidades }} unidades{% else %}, vacío{% endif %}">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L21 7H6"/></svg>
+  {% if carrito_unidades %}<span class="insignia" aria-hidden="true">{{ carrito_unidades }}</span>{% endif %}
+</a>

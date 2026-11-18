@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block titulo %}Carrito · Warawak{% endblock %}
+{% block menu %}{% include "_encabezado_publico.html" %}{% endblock %}
+
+{% block contenido %}
+{% include "_avisos.html" %}
+<h1 class="titulo-pagina titulo-izquierda">Tu carrito</h1>
+
+{% if lineas %}
+<div class="carrito">
+  <div class="tabla-envoltura">
+    <table class="tabla-carrito">
+      <caption class="solo-lectores">Productos en tu carrito</caption>
+      <thead>
+        <tr><th scope="col">Producto</th><th scope="col">Precio</th><th scope="col">Cantidad</th><th scope="col">Subtotal</th></tr>
+      </thead>
+      <tbody>
+        {% for l in lineas %}
+        <tr>
+          <td>
+            <a class="carrito-producto" href="{{ url_for('ver_producto', producto_id=l.producto.id) }}">
+              <span class="carrito-foto">
+                {% if l.producto.imagen %}<img src="{{ url_for('static', filename='img/productos/' ~ l.producto.imagen) }}" alt="">{% else %}<span aria-hidden="true">{{ l.producto.nombre[0] }}</span>{% endif %}
+              </span>
+              <span>{{ l.producto.nombre }}</span>
+            </a>
+          </td>
+          <td>{{ l.producto.valor | pesos }}</td>
+          <td>
+            <form class="cantidad-fila" method="post" action="{{ url_for('carrito_cambiar', producto_id=l.producto.id) }}">
+              {% include "_csrf.html" %}
+              <button type="submit" name="accion" value="menos" class="cantidad-boton" aria-label="Una unidad menos de {{ l.producto.nombre }}">−</button>
+              <span class="cantidad-valor" aria-label="{{ l.cantidad }} unidades">{{ l.cantidad }}</span>
+              <button type="submit" name="accion" value="mas" class="cantidad-boton cantidad-mas" aria-label="Una unidad más de {{ l.producto.nombre }}" {% if l.cantidad >= max_cantidad %}disabled{% endif %}>+</button>
+              <button type="submit" name="accion" value="quitar" class="enlace-quitar" aria-label="Quitar {{ l.producto.nombre }} del carrito">Quitar</button>
+            </form>
+          </td>
+          <td class="subtotal">{{ l.subtotal | pesos }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <aside class="resumen" aria-label="Resumen del pedido">
+    <p class="resumen-linea"><span>Unidades</span><strong>{{ unidades }}</strong></p>
+    <p class="resumen-total"><span>Total</span><strong>{{ total | pesos }}</strong></p>
+    <a class="boton-rojo boton-pagar" href="{{ url_for('pago') }}">Continuar con el pago</a>
+    <a class="resumen-enlace" href="{{ url_for('raiz') }}">Seguir comprando</a>
+    <form method="post" action="{{ url_for('carrito_vaciar') }}">
+      {% include "_csrf.html" %}
+      <button type="submit" class="enlace-quitar">Vaciar carrito</button>
+    </form>
+  </aside>
+</div>
+{% else %}
+<div class="panel-mensaje" role="status">
+  <p>Tu carrito está vacío.</p>
+  <a class="boton-ok" href="{{ url_for('raiz') }}">Ver el menú</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}{{ producto.nombre }} · Warawak{% endblock %}
+{% block menu %}{% include "_encabezado_publico.html" %}{% endblock %}
+
+{% block contenido %}
+{% include "_avisos.html" %}
+<p class="migas"><a href="{{ url_for('raiz') }}">← Volver al menú</a></p>
+
+<section class="detalle">
+  <div class="detalle-foto">
+    {% if producto.imagen %}
+      <img src="{{ url_for('static', filename='img/productos/' ~ producto.imagen) }}" alt="{{ producto.nombre }}">
+    {% else %}
+      <span aria-hidden="true">{{ producto.nombre[0] }}</span>
+    {% endif %}
+  </div>
+
+  <div class="detalle-info">
+    <h1>{{ producto.nombre }}</h1>
+    <p class="detalle-precio">{{ producto.valor | pesos }}</p>
+    {% if producto.descripcion %}<p class="detalle-descripcion">{{ producto.descripcion }}</p>{% endif %}
+
+    {% if mostrar_carrito %}
+    <form class="detalle-compra" method="post" action="{{ url_for('carrito_agregar', producto_id=producto.id) }}">
+      {% include "_csrf.html" %}
+      <input type="hidden" name="destino" value="carrito">
+      <div class="cantidad">
+        <label class="solo-lectores" for="cantidad">Cantidad</label>
+        <button type="button" class="cantidad-boton" data-cantidad-menos aria-label="Una unidad menos">−</button>
+        <input type="number" id="cantidad" name="cantidad" value="1" min="1" max="{{ max_cantidad }}" inputmode="numeric">
+        <button type="button" class="cantidad-boton cantidad-mas" data-cantidad-mas aria-label="Una unidad más">+</button>
+      </div>
+      <button type="submit" class="boton-rojo boton-comprar">Agregar al carrito</button>
+    </form>
+    <p class="ayuda">Máximo {{ max_cantidad }} unidades por producto.</p>
+    {% endif %}
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='js/cantidad.js') }}"></script>
+{% endblock %}

@@ -2,8 +2,8 @@
 
 Prototipo funcional hecho con Flask y SQLite.
 
-- **Visitantes:** ven el menú digital (nombre, valor, descripción y foto de cada producto) sin iniciar sesión.
-- **Clientes:** cuentas creadas desde "Regístrate". Por ahora solo ven el menú; más adelante tendrán carrito y pagos.
+- **Visitantes:** ven el menú digital (nombre, valor, descripción y foto de cada producto), pueden buscar productos y armar un **carrito** con cantidades y total, sin iniciar sesión.
+- **Clientes:** cuentas creadas desde "Regístrate". Para continuar con la compra se necesita una cuenta; el pago con PSE se desarrollará más adelante.
 - **Administradores:** los únicos que acceden al panel para crear, editar y eliminar productos.
   Se crean únicamente con el script `crear_admin.py`, nunca desde la página.
 

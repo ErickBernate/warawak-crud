@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from functools import wraps
 
-from flask import Flask, abort, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -179,7 +179,73 @@ def admin_requerido(vista):
 
 
 def destino_tras_login(usuario):
-    return url_for("inicio") if usuario.es_admin else url_for("raiz")
+    if usuario.es_admin:
+        return url_for("inicio")
+    return url_for("carrito") if leer_carrito() else url_for("raiz")
+
+
+# ---------------------------------------------------------------- carrito (guardado en la sesión)
+MAX_CANTIDAD = 20            # unidades por producto
+MAX_PRODUCTOS_EN_CARRITO = 30  # productos distintos
+
+
+def leer_carrito():
+    """Carrito de la sesión como {id_producto: cantidad}, ya saneado."""
+    crudo = session.get("carrito")
+    carrito = {}
+    if isinstance(crudo, dict):
+        for clave, cantidad in crudo.items():
+            try:
+                producto_id, unidades = int(clave), int(cantidad)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= unidades <= MAX_CANTIDAD:
+                carrito[producto_id] = unidades
+    return carrito
+
+
+def guardar_carrito(carrito):
+    session["carrito"] = {str(producto_id): unidades for producto_id, unidades in carrito.items()}
+
+
+def detalle_carrito():
+    """(líneas, unidades, total) con los precios ACTUALES de la base de datos.
+
+    Los productos que el administrador ya eliminó se quitan del carrito.
+    """
+    carrito = leer_carrito()
+    if not carrito:
+        return [], 0, 0
+    productos = {p.id: p for p in Producto.query.filter(Producto.id.in_(list(carrito))).all()}
+    lineas = [
+        {"producto": productos[pid], "cantidad": cant, "subtotal": productos[pid].valor * cant}
+        for pid, cant in carrito.items()
+        if pid in productos
+    ]
+    lineas.sort(key=lambda linea: linea["producto"].id)
+    if len(lineas) != len(carrito):
+        guardar_carrito({l["producto"].id: l["cantidad"] for l in lineas})
+    return lineas, sum(l["cantidad"] for l in lineas), sum(l["subtotal"] for l in lineas)
+
+
+def solo_compradores(vista):
+    """El carrito es para visitantes y clientes: el administrador va a su panel."""
+    @wraps(vista)
+    def envoltura(*args, **kwargs):
+        if current_user.is_authenticated and current_user.es_admin:
+            return redirect(url_for("inicio"))
+        return vista(*args, **kwargs)
+
+    return envoltura
+
+
+@app.context_processor
+def datos_del_carrito():
+    es_admin = current_user.is_authenticated and current_user.es_admin
+    return {
+        "mostrar_carrito": not es_admin,
+        "carrito_unidades": 0 if es_admin else detalle_carrito()[1],
+    }
 
 
 # ---------------------------------------------------------------- validaciones
@@ -348,8 +414,21 @@ def pantalla_busqueda(accion):
 @app.route("/")
 def raiz():
     """Menú digital público: lo ve cualquier persona, sin iniciar sesión."""
+    consulta = request.args.get("q", "").strip()[:120]
     productos = Producto.query.order_by(Producto.id).all()
-    return render_template("menu_publico.html", productos=productos)
+    buscado = normalizar(consulta)
+    if buscado:
+        productos = [p for p in productos if buscado in normalizar(p.nombre)]
+    return render_template("menu_publico.html", productos=productos, consulta=consulta if buscado else "")
+
+
+@app.route("/producto/<int:producto_id>")
+def ver_producto(producto_id):
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        flash("No se encontró el producto.", "error")
+        return redirect(url_for("raiz"))
+    return render_template("producto_detalle.html", producto=producto, max_cantidad=MAX_CANTIDAD)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -416,10 +495,95 @@ def registro():
     return render_template("registro.html", errores=errores, datos=datos)
 
 
+@app.route("/carrito")
+@solo_compradores
+def carrito():
+    lineas, unidades, total = detalle_carrito()
+    return render_template("carrito.html", lineas=lineas, unidades=unidades, total=total, max_cantidad=MAX_CANTIDAD)
+
+
+@app.route("/carrito/agregar/<int:producto_id>", methods=["POST"])
+@solo_compradores
+def carrito_agregar(producto_id):
+    desde_detalle = request.form.get("destino") == "carrito"
+    volver_a_menu = redirect(url_for("raiz", q=request.form.get("q", "").strip()[:120] or None))
+
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        flash("No se encontró el producto.", "error")
+        return redirect(url_for("raiz"))
+
+    volver_con_error = (
+        redirect(url_for("ver_producto", producto_id=producto_id)) if desde_detalle else volver_a_menu
+    )
+    try:
+        cantidad = int(request.form.get("cantidad", "1"))
+    except ValueError:
+        cantidad = 0
+    if not 1 <= cantidad <= MAX_CANTIDAD:
+        flash(f"Elige una cantidad entre 1 y {MAX_CANTIDAD}.", "error")
+        return volver_con_error
+
+    carrito_actual = leer_carrito()
+    if producto_id not in carrito_actual and len(carrito_actual) >= MAX_PRODUCTOS_EN_CARRITO:
+        flash(f"Tu carrito ya tiene el máximo de {MAX_PRODUCTOS_EN_CARRITO} productos distintos.", "error")
+        return redirect(url_for("carrito"))
+
+    nueva = carrito_actual.get(producto_id, 0) + cantidad
+    if nueva > MAX_CANTIDAD:
+        carrito_actual[producto_id] = MAX_CANTIDAD
+        flash(f"El máximo es {MAX_CANTIDAD} unidades por producto: {producto.nombre} quedó en {MAX_CANTIDAD}.", "error")
+    else:
+        carrito_actual[producto_id] = nueva
+        flash(f"Agregado al carrito: {producto.nombre} (x{cantidad}).", "success")
+    guardar_carrito(carrito_actual)
+
+    return redirect(url_for("carrito")) if desde_detalle else volver_a_menu
+
+
+@app.route("/carrito/cambiar/<int:producto_id>", methods=["POST"])
+@solo_compradores
+def carrito_cambiar(producto_id):
+    carrito_actual = leer_carrito()
+    if producto_id in carrito_actual:
+        accion = request.form.get("accion")
+        if accion == "mas":
+            carrito_actual[producto_id] = min(carrito_actual[producto_id] + 1, MAX_CANTIDAD)
+        elif accion == "menos":
+            carrito_actual[producto_id] -= 1
+            if carrito_actual[producto_id] < 1:
+                del carrito_actual[producto_id]
+        elif accion == "quitar":
+            del carrito_actual[producto_id]
+        guardar_carrito(carrito_actual)
+    return redirect(url_for("carrito"))
+
+
+@app.route("/carrito/vaciar", methods=["POST"])
+@solo_compradores
+def carrito_vaciar():
+    session.pop("carrito", None)
+    return redirect(url_for("carrito"))
+
+
+@app.route("/pago")
+@solo_compradores
+def pago():
+    """Por ahora solo comprueba que haya cuenta; el pago con PSE se desarrollará después."""
+    if not current_user.is_authenticated:
+        flash("Inicia sesión o crea una cuenta para continuar con tu compra.", "error")
+        return redirect(url_for("login"))
+    lineas, unidades, total = detalle_carrito()
+    if not lineas:
+        return redirect(url_for("carrito"))
+    return render_template("pago.html", unidades=unidades, total=total)
+
+
 @app.route("/logout", methods=["POST"])
 @login_required
 def logout():
     logout_user()
+    session.pop("carrito", None)  # el carrito no queda en un equipo compartido
     return redirect(url_for("raiz"))
 
 

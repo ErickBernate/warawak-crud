@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block titulo %}Pago · Warawak{% endblock %}
+{% block menu %}{% include "_encabezado_publico.html" %}{% endblock %}
+
+{% block contenido %}
+<h1 class="solo-lectores">Pago</h1>
+<div class="panel-mensaje" role="status">
+  <p>El pago con PSE estará disponible próximamente.<br>Tu carrito se conserva: {{ unidades }} unidades, total {{ total | pesos }}.</p>
+  <a class="boton-ok" href="{{ url_for('carrito') }}">Volver al carrito</a>
+</div>
+{% endblock %}
