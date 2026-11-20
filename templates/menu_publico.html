@@ -37,7 +37,9 @@
     <h2><a href="{{ url_for('ver_producto', producto_id=p.id) }}">{{ p.nombre }}</a></h2>
     <p class="precio">{{ p.valor | pesos }}</p>
     {% if p.descripcion %}<p class="descripcion">{{ p.descripcion }}</p>{% endif %}
-    {% if mostrar_carrito %}
+    {% if p.existencias <= 0 %}
+    <p class="etiqueta-agotado">Agotado</p>
+    {% elif mostrar_carrito %}
     <form class="form-agregar" method="post" action="{{ url_for('carrito_agregar', producto_id=p.id) }}">
       {% include "_csrf.html" %}
       <input type="hidden" name="cantidad" value="1">

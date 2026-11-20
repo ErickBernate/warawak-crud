@@ -37,6 +37,24 @@
                   {% if errores.descripcion %}aria-invalid="true" aria-describedby="error-descripcion"{% endif %}>{{ datos.get('descripcion', '') }}</textarea>
         {% if errores.descripcion %}<p class="error" id="error-descripcion">{{ errores.descripcion }}</p>{% endif %}
       </div>
+
+      {% if editando %}
+      <div class="grupo">
+        <span class="etiqueta-estatica">Existencias actuales</span>
+        <p class="existencias-actuales"><strong>{{ producto.existencias }}</strong>
+          <span class="estado estado-{{ producto.estado_stock }}">{{ producto.estado_texto }}</span></p>
+        <p class="ayuda ayuda-izq"><a href="{{ url_for('inventario_producto', producto_id=producto.id) }}">Registrar entrada, salida o conteo físico</a></p>
+      </div>
+      {% else %}
+      <div class="grupo">
+        <label for="existencias">Existencias iniciales</label>
+        <input class="campo" type="text" id="existencias" name="existencias" inputmode="numeric" autocomplete="off"
+               value="{{ datos.get('existencias', '0') }}" required aria-describedby="ayuda-existencias{% if errores.existencias %} error-existencias{% endif %}"
+               {% if errores.existencias %}aria-invalid="true"{% endif %}>
+        <p class="ayuda ayuda-izq" id="ayuda-existencias">Unidades disponibles al crear el producto (0 si aún no hay).</p>
+        {% if errores.existencias %}<p class="error" id="error-existencias">{{ errores.existencias }}</p>{% endif %}
+      </div>
+      {% endif %}
     </div>
 
     <div class="crear-foto">

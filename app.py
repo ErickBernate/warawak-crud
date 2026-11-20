@@ -4,7 +4,7 @@ import re
 import secrets
 import unicodedata
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
@@ -18,7 +18,7 @@ from flask_login import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFError, CSRFProtect
-from sqlalchemy import func, inspect, text
+from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -66,6 +66,11 @@ os.makedirs(CARPETA_IMAGENES, exist_ok=True)
 EXTENSIONES_PERMITIDAS = {"png", "jpg", "jpeg", "webp", "gif"}
 MAX_IMAGEN_BYTES = 2 * 1024 * 1024
 MAX_VALOR = 100_000_000
+MAX_EXISTENCIAS = 99_999     # tope de existencias por producto
+UMBRAL_STOCK_BAJO = 5        # hasta esta cantidad se marca "existencias bajas"
+EXISTENCIAS_EJEMPLO = 20     # para los productos de ejemplo de una base nueva
+MAX_NOTA = 200
+HORA_COLOMBIA = timezone(timedelta(hours=-5))  # Colombia no usa horario de verano
 
 csrf = CSRFProtect(app)  # exige token en todos los formularios POST
 db = SQLAlchemy(app)
@@ -99,6 +104,35 @@ class Producto(db.Model):
     valor = db.Column(db.Integer, nullable=False)
     descripcion = db.Column(db.Text, nullable=False, default="")
     imagen = db.Column(db.String(255), nullable=True)
+    existencias = db.Column(db.Integer, nullable=False, default=0)
+    movimientos = db.relationship(
+        "Movimiento", backref="producto", cascade="all, delete-orphan", order_by="Movimiento.id"
+    )
+
+    @property
+    def estado_stock(self):
+        if self.existencias <= 0:
+            return "agotado"
+        return "bajo" if self.existencias <= UMBRAL_STOCK_BAJO else "disponible"
+
+    @property
+    def estado_texto(self):
+        return {"agotado": "Agotado", "bajo": "Existencias bajas", "disponible": "Disponible"}[self.estado_stock]
+
+
+class Movimiento(db.Model):
+    """Registro de cada cambio de existencias (entrada, salida, conteo físico...)."""
+
+    __tablename__ = "movimiento_inventario"
+    id = db.Column(db.Integer, primary_key=True)
+    producto_id = db.Column(db.Integer, db.ForeignKey("producto.id"), nullable=False, index=True)
+    tipo = db.Column(db.String(20), nullable=False)  # inicial, entrada, salida, ajuste (venta y devolucion, más adelante)
+    cantidad = db.Column(db.Integer, nullable=False)  # con signo: +entra, -sale
+    saldo = db.Column(db.Integer, nullable=False)     # existencias después del movimiento
+    nota = db.Column(db.String(MAX_NOTA), nullable=False, default="")
+    usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=True)
+    creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    usuario = db.relationship("Usuario")
 
 
 @login_manager.user_loader
@@ -116,6 +150,29 @@ def formato_pesos(valor):
 def formato_miles(valor):
     """12000 -> '12.000'"""
     return f"{valor:,}".replace(",", ".")
+
+
+@app.template_filter("fecha_local")
+def formato_fecha_local(valor):
+    """Fecha guardada en UTC -> '16/11/2026 14:35' en hora de Colombia."""
+    if valor is None:
+        return "—"
+    return valor.replace(tzinfo=timezone.utc).astimezone(HORA_COLOMBIA).strftime("%d/%m/%Y %H:%M")
+
+
+TIPOS_MOVIMIENTO = {
+    "inicial": "Existencias iniciales",
+    "entrada": "Entrada",
+    "salida": "Salida",
+    "ajuste": "Conteo físico",
+    "venta": "Venta",
+    "devolucion": "Devolución",
+}
+
+
+@app.template_filter("tipo_movimiento")
+def nombre_tipo_movimiento(tipo):
+    return TIPOS_MOVIMIENTO.get(tipo, tipo)
 
 
 @app.after_request
@@ -143,14 +200,23 @@ def sembrar_datos():
     """Solo productos de ejemplo. Los administradores se crean con `python crear_admin.py`."""
     if Producto.query.count() == 0:
         for nombre, valor in PRODUCTOS_INICIALES:
-            db.session.add(Producto(nombre=nombre, valor=valor))
+            producto = Producto(nombre=nombre, valor=valor, existencias=EXISTENCIAS_EJEMPLO)
+            producto.movimientos.append(
+                Movimiento(tipo="inicial", cantidad=EXISTENCIAS_EJEMPLO, saldo=EXISTENCIAS_EJEMPLO,
+                           nota="Existencias de ejemplo")
+            )
+            db.session.add(producto)
     db.session.commit()
 
 
-def migrar_usuarios():
-    """Agrega las columnas nuevas a una base creada antes de existir el registro de cuentas."""
-    columnas = {c["name"] for c in inspect(db.engine).get_columns("usuario")}
+def migrar_base():
+    """Agrega las columnas nuevas a una base creada con una versión anterior de la app."""
+    inspector = inspect(db.engine)
+    columnas = {c["name"] for c in inspector.get_columns("usuario")}
+    columnas_producto = {c["name"] for c in inspector.get_columns("producto")}
     with db.engine.begin() as conexion:
+        if "existencias" not in columnas_producto:
+            conexion.execute(text("ALTER TABLE producto ADD COLUMN existencias INTEGER NOT NULL DEFAULT 0"))
         if "contacto" not in columnas:
             conexion.execute(text("ALTER TABLE usuario ADD COLUMN contacto VARCHAR(120)"))
             conexion.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_contacto ON usuario (contacto)"))
@@ -162,7 +228,7 @@ def migrar_usuarios():
 
 with app.app_context():
     db.create_all()
-    migrar_usuarios()
+    migrar_base()
     sembrar_datos()
 
 
@@ -218,7 +284,14 @@ def detalle_carrito():
         return [], 0, 0
     productos = {p.id: p for p in Producto.query.filter(Producto.id.in_(list(carrito))).all()}
     lineas = [
-        {"producto": productos[pid], "cantidad": cant, "subtotal": productos[pid].valor * cant}
+        {
+            "producto": productos[pid],
+            "cantidad": cant,
+            "subtotal": productos[pid].valor * cant,
+            "disponible": productos[pid].existencias,
+            "limite": min(MAX_CANTIDAD, productos[pid].existencias),
+            "excede": cant > productos[pid].existencias,
+        }
         for pid, cant in carrito.items()
         if pid in productos
     ]
@@ -237,6 +310,46 @@ def solo_compradores(vista):
         return vista(*args, **kwargs)
 
     return envoltura
+
+
+def aplicar_movimiento(producto_id, delta, tipo, nota="", usuario_id=None, esperado=None):
+    """Cambia las existencias y registra el movimiento en UNA sola transacción.
+
+    - Normal: solo se aplica si las existencias resultantes quedan entre 0 y MAX_EXISTENCIAS,
+      así dos operaciones simultáneas nunca dejan el inventario en negativo.
+    - Con `esperado` (conteo físico): solo se aplica si las existencias siguen siendo las que se vieron.
+    Devuelve el saldo resultante, o None si no se pudo aplicar (en ese caso no cambia nada).
+    """
+    condiciones = [Producto.id == producto_id]
+    if esperado is not None:
+        condiciones.append(Producto.existencias == esperado)
+    else:
+        condiciones += [Producto.existencias + delta >= 0, Producto.existencias + delta <= MAX_EXISTENCIAS]
+    resultado = db.session.execute(
+        update(Producto)
+        .where(*condiciones)
+        .values(existencias=Producto.existencias + delta)
+        .execution_options(synchronize_session=False)
+    )
+    if resultado.rowcount != 1:
+        db.session.rollback()
+        return None
+    saldo = db.session.execute(select(Producto.existencias).where(Producto.id == producto_id)).scalar_one()
+    db.session.add(
+        Movimiento(producto_id=producto_id, tipo=tipo, cantidad=delta, saldo=saldo,
+                   nota=nota[:MAX_NOTA], usuario_id=usuario_id)
+    )
+    db.session.commit()
+    return saldo
+
+
+def interpretar_existencias(texto):
+    """'15' -> 15. Solo enteros de 0 a MAX_EXISTENCIAS; si no, None."""
+    texto = texto.strip()
+    if not (texto.isascii() and texto.isdigit()):
+        return None
+    valor = int(texto)
+    return valor if valor <= MAX_EXISTENCIAS else None
 
 
 @app.context_processor
@@ -428,7 +541,9 @@ def ver_producto(producto_id):
     if producto is None:
         flash("No se encontró el producto.", "error")
         return redirect(url_for("raiz"))
-    return render_template("producto_detalle.html", producto=producto, max_cantidad=MAX_CANTIDAD)
+    return render_template(
+        "producto_detalle.html", producto=producto, max_cantidad=min(MAX_CANTIDAD, producto.existencias)
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -499,7 +614,10 @@ def registro():
 @solo_compradores
 def carrito():
     lineas, unidades, total = detalle_carrito()
-    return render_template("carrito.html", lineas=lineas, unidades=unidades, total=total, max_cantidad=MAX_CANTIDAD)
+    return render_template(
+        "carrito.html", lineas=lineas, unidades=unidades, total=total,
+        hay_excedidos=any(l["excede"] for l in lineas),
+    )
 
 
 @app.route("/carrito/agregar/<int:producto_id>", methods=["POST"])
@@ -524,15 +642,23 @@ def carrito_agregar(producto_id):
         flash(f"Elige una cantidad entre 1 y {MAX_CANTIDAD}.", "error")
         return volver_con_error
 
+    if producto.existencias <= 0:
+        flash(f"{producto.nombre} está agotado.", "error")
+        return volver_con_error
+
     carrito_actual = leer_carrito()
     if producto_id not in carrito_actual and len(carrito_actual) >= MAX_PRODUCTOS_EN_CARRITO:
         flash(f"Tu carrito ya tiene el máximo de {MAX_PRODUCTOS_EN_CARRITO} productos distintos.", "error")
         return redirect(url_for("carrito"))
 
+    limite = min(MAX_CANTIDAD, producto.existencias)
     nueva = carrito_actual.get(producto_id, 0) + cantidad
-    if nueva > MAX_CANTIDAD:
-        carrito_actual[producto_id] = MAX_CANTIDAD
-        flash(f"El máximo es {MAX_CANTIDAD} unidades por producto: {producto.nombre} quedó en {MAX_CANTIDAD}.", "error")
+    if nueva > limite:
+        carrito_actual[producto_id] = limite
+        if producto.existencias < MAX_CANTIDAD:
+            flash(f"Solo hay {producto.existencias} unidades de {producto.nombre}: tu carrito quedó en {limite}.", "error")
+        else:
+            flash(f"El máximo es {MAX_CANTIDAD} unidades por producto: {producto.nombre} quedó en {MAX_CANTIDAD}.", "error")
     else:
         carrito_actual[producto_id] = nueva
         flash(f"Agregado al carrito: {producto.nombre} (x{cantidad}).", "success")
@@ -548,7 +674,12 @@ def carrito_cambiar(producto_id):
     if producto_id in carrito_actual:
         accion = request.form.get("accion")
         if accion == "mas":
-            carrito_actual[producto_id] = min(carrito_actual[producto_id] + 1, MAX_CANTIDAD)
+            producto = db.session.get(Producto, producto_id)
+            limite = min(MAX_CANTIDAD, producto.existencias) if producto else 0
+            if carrito_actual[producto_id] + 1 > limite:
+                flash("No hay más unidades disponibles de este producto.", "error")
+            else:
+                carrito_actual[producto_id] += 1
         elif accion == "menos":
             carrito_actual[producto_id] -= 1
             if carrito_actual[producto_id] < 1:
@@ -576,6 +707,9 @@ def pago():
     lineas, unidades, total = detalle_carrito()
     if not lineas:
         return redirect(url_for("carrito"))
+    if any(l["excede"] for l in lineas):
+        flash("Hay productos con más unidades de las disponibles. Ajusta las cantidades marcadas.", "error")
+        return redirect(url_for("carrito"))
     return render_template("pago.html", unidades=unidades, total=total)
 
 
@@ -597,19 +731,31 @@ def inicio():
 @app.route("/productos/crear", methods=["GET", "POST"])
 @admin_requerido
 def crear():
-    errores, datos = {}, {}
+    errores, datos = {}, {"existencias": "0"}
 
     if request.method == "POST":
         datos, errores, valor, foto = leer_formulario()
-        if not errores:
-            db.session.add(
-                Producto(
-                    nombre=datos["nombre"],
-                    valor=valor,
-                    descripcion=datos["descripcion"],
-                    imagen=guardar_foto(foto) if foto else None,
-                )
+        datos["existencias"] = request.form.get("existencias", "").strip()
+        existencias = interpretar_existencias(datos["existencias"])
+        if existencias is None:
+            errores["existencias"] = (
+                f"Escribe las existencias iniciales: un número entero entre 0 y {formato_miles(MAX_EXISTENCIAS)} "
+                "(0 si aún no hay)."
             )
+        if not errores:
+            producto = Producto(
+                nombre=datos["nombre"],
+                valor=valor,
+                descripcion=datos["descripcion"],
+                imagen=guardar_foto(foto) if foto else None,
+                existencias=existencias,
+            )
+            if existencias > 0:
+                producto.movimientos.append(
+                    Movimiento(tipo="inicial", cantidad=existencias, saldo=existencias,
+                               nota="Existencias iniciales al crear el producto", usuario_id=current_user.id)
+                )
+            db.session.add(producto)
             db.session.commit()
             flash(f"Producto creado: {datos['nombre']}.", "success")
             return redirect(url_for("inicio"))
@@ -681,6 +827,95 @@ def eliminar_producto(producto_id):
         producto=producto,
         confirmar=request.args.get("confirmar") == "1",
     )
+
+
+@app.route("/inventario")
+@admin_requerido
+def inventario():
+    productos = Producto.query.order_by(func.lower(Producto.nombre)).all()
+    return render_template(
+        "inventario.html",
+        productos=productos,
+        agotados=sum(1 for p in productos if p.existencias <= 0),
+        bajos=sum(1 for p in productos if 0 < p.existencias <= UMBRAL_STOCK_BAJO),
+        umbral=UMBRAL_STOCK_BAJO,
+        max_existencias=MAX_EXISTENCIAS,
+    )
+
+
+@app.route("/inventario/<int:producto_id>")
+@admin_requerido
+def inventario_producto(producto_id):
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        flash("No se encontró el producto.", "error")
+        return redirect(url_for("inventario"))
+    movimientos = (
+        Movimiento.query.filter_by(producto_id=producto_id).order_by(Movimiento.id.desc()).limit(50).all()
+    )
+    return render_template(
+        "inventario_producto.html", producto=producto, movimientos=movimientos,
+        max_existencias=MAX_EXISTENCIAS, max_nota=MAX_NOTA,
+    )
+
+
+@app.route("/inventario/<int:producto_id>/movimiento", methods=["POST"])
+@admin_requerido
+def inventario_movimiento(producto_id):
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        flash("No se encontró el producto.", "error")
+        return redirect(url_for("inventario"))
+
+    desde_lista = request.form.get("volver") == "lista"
+    destino = url_for("inventario") if desde_lista else url_for("inventario_producto", producto_id=producto_id)
+
+    tipo = request.form.get("tipo", "")
+    nota = " ".join(request.form.get("nota", "").split())
+    if tipo not in ("entrada", "salida", "ajuste"):
+        flash("Elige un tipo de movimiento válido.", "error")
+        return redirect(destino)
+    if len(nota) > MAX_NOTA:
+        flash(f"La nota admite hasta {MAX_NOTA} caracteres.", "error")
+        return redirect(destino)
+
+    try:
+        cantidad = int(request.form.get("cantidad", ""))
+    except ValueError:
+        cantidad = -1
+    minimo = 0 if tipo == "ajuste" else 1
+    if not minimo <= cantidad <= MAX_EXISTENCIAS:
+        flash(f"La cantidad debe ser un número entero entre {minimo} y {formato_miles(MAX_EXISTENCIAS)}.", "error")
+        return redirect(destino)
+
+    anterior = producto.existencias
+    esperado = None
+    if tipo == "entrada":
+        delta = cantidad
+        if anterior + cantidad > MAX_EXISTENCIAS:
+            flash(f"Las existencias no pueden superar {formato_miles(MAX_EXISTENCIAS)}.", "error")
+            return redirect(destino)
+    elif tipo == "salida":
+        delta = -cantidad
+        if cantidad > anterior:
+            flash(f"No puedes sacar {cantidad}: solo hay {anterior} de {producto.nombre}.", "error")
+            return redirect(destino)
+    else:  # conteo físico: fija el total contado y guarda la diferencia
+        delta = cantidad - anterior
+        esperado = anterior
+
+    saldo = aplicar_movimiento(producto_id, delta, tipo, nota, current_user.id, esperado)
+    if saldo is None:
+        flash("Las existencias cambiaron mientras registrabas el movimiento. Revisa el valor actual e inténtalo de nuevo.", "error")
+    elif tipo == "entrada":
+        flash(f"Entrada registrada: +{cantidad} de {producto.nombre}. Existencias: {saldo}.", "success")
+    elif tipo == "salida":
+        flash(f"Salida registrada: −{cantidad} de {producto.nombre}. Existencias: {saldo}.", "success")
+    elif delta == 0:
+        flash(f"Conteo registrado: {producto.nombre} coincide con el sistema ({saldo}).", "success")
+    else:
+        flash(f"Conteo registrado: {producto.nombre} pasó de {anterior} a {saldo} (diferencia {delta:+d}).", "success")
+    return redirect(destino)
 
 
 @app.errorhandler(CSRFError)

@@ -13,6 +13,7 @@
     <a class="boton-editar" href="{{ url_for('eliminar_producto' if eliminando else 'editar_producto', producto_id=p.id) }}">{{ 'Eliminar Producto' if eliminando else 'Editar Producto' }}<span class="solo-lectores">: {{ p.nombre }}</span></a>
     <h2>{{ p.nombre }}</h2>
     <p class="precio">{{ p.valor | pesos }}</p>
+    <p class="existencias-linea">Existencias: <strong>{{ p.existencias }}</strong> <span class="estado estado-{{ p.estado_stock }}">{{ p.estado_texto }}</span></p>
   </li>
   {% endfor %}
 </ul>

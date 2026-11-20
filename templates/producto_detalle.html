@@ -20,7 +20,9 @@
     <p class="detalle-precio">{{ producto.valor | pesos }}</p>
     {% if producto.descripcion %}<p class="detalle-descripcion">{{ producto.descripcion }}</p>{% endif %}
 
-    {% if mostrar_carrito %}
+    {% if producto.existencias <= 0 %}
+    <p class="etiqueta-agotado etiqueta-grande">Agotado</p>
+    {% elif mostrar_carrito %}
     <form class="detalle-compra" method="post" action="{{ url_for('carrito_agregar', producto_id=producto.id) }}">
       {% include "_csrf.html" %}
       <input type="hidden" name="destino" value="carrito">
@@ -32,7 +34,7 @@
       </div>
       <button type="submit" class="boton-rojo boton-comprar">Agregar al carrito</button>
     </form>
-    <p class="ayuda">Máximo {{ max_cantidad }} unidades por producto.</p>
+    <p class="ayuda">{% if producto.existencias < 20 %}Quedan {{ producto.existencias }} disponibles.{% else %}Máximo {{ max_cantidad }} unidades por producto.{% endif %}</p>
     {% endif %}
   </div>
 </section>

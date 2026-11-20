@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block titulo %}Inventario · Warawak{% endblock %}
+{% block menu %}{% include "_menu.html" %}{% endblock %}
+
+{% block contenido %}
+<h1 class="titulo-pagina titulo-izquierda">Inventario</h1>
+{% include "_avisos.html" %}
+
+<p class="resumen-inventario">
+  {{ productos | length }} productos ·
+  <strong>{{ agotados }}</strong> agotados ·
+  <strong>{{ bajos }}</strong> con existencias bajas (hasta {{ umbral }} unidades)
+</p>
+
+{% if productos %}
+<div class="tabla-envoltura">
+  <table class="tabla-carrito tabla-inventario">
+    <caption class="solo-lectores">Existencias de cada producto</caption>
+    <thead>
+      <tr>
+        <th scope="col">Producto</th>
+        <th scope="col">Existencias</th>
+        <th scope="col">Estado</th>
+        <th scope="col">Registrar conteo físico</th>
+        <th scope="col">Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in productos %}
+      <tr>
+        <th scope="row" class="inventario-nombre">{{ p.nombre }}</th>
+        <td class="inventario-cifra">{{ p.existencias }}</td>
+        <td><span class="estado estado-{{ p.estado_stock }}">{{ p.estado_texto }}</span></td>
+        <td>
+          <form class="conteo-fila" method="post" action="{{ url_for('inventario_movimiento', producto_id=p.id) }}">
+            {% include "_csrf.html" %}
+            <input type="hidden" name="tipo" value="ajuste">
+            <input type="hidden" name="volver" value="lista">
+            <input type="number" name="cantidad" min="0" max="{{ max_existencias }}" value="{{ p.existencias }}" inputmode="numeric"
+                   aria-label="Cantidad contada de {{ p.nombre }}" required>
+            <button type="submit" class="boton-gris">Guardar conteo</button>
+          </form>
+        </td>
+        <td><a href="{{ url_for('inventario_producto', producto_id=p.id) }}">Movimientos<span class="solo-lectores"> de {{ p.nombre }}</span></a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="ayuda ayuda-izq">El conteo físico fija el total que contaste y guarda la diferencia con lo que decía el sistema. Para registrar entradas o salidas, abre los movimientos del producto.</p>
+{% else %}
+<p class="vacio">Aún no hay productos. Créalos desde <a href="{{ url_for('crear') }}">Crear Producto</a>.</p>
+{% endif %}
+{% endblock %}
