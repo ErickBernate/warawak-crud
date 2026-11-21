@@ -76,7 +76,7 @@ csrf = CSRFProtect(app)  # exige token en todos los formularios POST
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
-login_manager.login_message = "Inicia sesión para ver los productos."
+login_manager.login_message = "Inicia sesión para continuar."
 
 
 class Usuario(UserMixin, db.Model):
@@ -135,6 +135,72 @@ class Movimiento(db.Model):
     usuario = db.relationship("Usuario")
 
 
+ESTADOS_PEDIDO = {
+    "recibido": "Recibido",
+    "preparacion": "En preparación",
+    "entregado": "Entregado",
+    "cancelado": "Cancelado",
+}
+
+
+def _sin_zona(fecha):
+    return fecha.replace(tzinfo=None) if fecha else None
+
+
+class Pedido(db.Model):
+    """Pedido confirmado por un cliente. El número de pedido es su id."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=False, index=True)
+    estado = db.Column(db.String(20), nullable=False, default="recibido", index=True)
+    unidades = db.Column(db.Integer, nullable=False)
+    total = db.Column(db.Integer, nullable=False)
+    nota = db.Column(db.String(MAX_NOTA), nullable=False, default="")
+    token = db.Column(db.String(64), unique=True, nullable=True)  # evita pedidos duplicados por doble clic
+    creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    preparacion_en = db.Column(db.DateTime, nullable=True)
+    entregado_en = db.Column(db.DateTime, nullable=True)
+    cancelado_en = db.Column(db.DateTime, nullable=True)
+    cancelado_por = db.Column(db.String(20), nullable=True)  # "cliente" o "administrador"
+    motivo = db.Column(db.String(MAX_NOTA), nullable=False, default="")
+    usuario = db.relationship("Usuario")
+    detalles = db.relationship("PedidoDetalle", backref="pedido", cascade="all, delete-orphan", order_by="PedidoDetalle.id")
+
+    @property
+    def estado_texto(self):
+        return ESTADOS_PEDIDO.get(self.estado, self.estado)
+
+    @property
+    def segundos_espera(self):
+        """Desde que se recibió hasta que empezó la preparación."""
+        if self.preparacion_en and self.creado_en:
+            return int((_sin_zona(self.preparacion_en) - _sin_zona(self.creado_en)).total_seconds())
+        return None
+
+    @property
+    def segundos_total(self):
+        """Desde que se recibió hasta que se entregó."""
+        if self.entregado_en and self.creado_en:
+            return int((_sin_zona(self.entregado_en) - _sin_zona(self.creado_en)).total_seconds())
+        return None
+
+
+class PedidoDetalle(db.Model):
+    """Cada línea del pedido, con el nombre y el precio del momento de la compra."""
+
+    __tablename__ = "pedido_detalle"
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey("pedido.id"), nullable=False, index=True)
+    producto_id = db.Column(db.Integer, nullable=True)  # sin llave foránea: el producto puede eliminarse
+    nombre = db.Column(db.String(120), nullable=False)
+    valor_unitario = db.Column(db.Integer, nullable=False)
+    cantidad = db.Column(db.Integer, nullable=False)
+
+    @property
+    def subtotal(self):
+        return self.valor_unitario * self.cantidad
+
+
 @login_manager.user_loader
 def cargar_usuario(user_id):
     return db.session.get(Usuario, int(user_id))
@@ -158,6 +224,18 @@ def formato_fecha_local(valor):
     if valor is None:
         return "—"
     return valor.replace(tzinfo=timezone.utc).astimezone(HORA_COLOMBIA).strftime("%d/%m/%Y %H:%M")
+
+
+@app.template_filter("duracion")
+def formato_duracion(segundos):
+    """135 -> '2 min 15 s'"""
+    if segundos is None:
+        return "—"
+    minutos, resto = divmod(max(segundos, 0), 60)
+    horas, minutos = divmod(minutos, 60)
+    if horas:
+        return f"{horas} h {minutos} min"
+    return f"{minutos} min {resto} s" if minutos else f"{resto} s"
 
 
 TIPOS_MOVIMIENTO = {
@@ -312,19 +390,21 @@ def solo_compradores(vista):
     return envoltura
 
 
-def aplicar_movimiento(producto_id, delta, tipo, nota="", usuario_id=None, esperado=None):
-    """Cambia las existencias y registra el movimiento en UNA sola transacción.
+def _mover_stock(producto_id, delta, tipo, nota="", usuario_id=None, esperado=None, validar_tope=True):
+    """Cambia las existencias y deja el movimiento en la sesión, SIN confirmar la transacción.
 
-    - Normal: solo se aplica si las existencias resultantes quedan entre 0 y MAX_EXISTENCIAS,
-      así dos operaciones simultáneas nunca dejan el inventario en negativo.
+    - Normal: solo se aplica si las existencias resultantes no quedan negativas (ni pasan del tope).
+      Es una sola sentencia UPDATE condicionada, así dos operaciones simultáneas nunca dejan el stock en negativo.
     - Con `esperado` (conteo físico): solo se aplica si las existencias siguen siendo las que se vieron.
-    Devuelve el saldo resultante, o None si no se pudo aplicar (en ese caso no cambia nada).
+    Devuelve el saldo resultante, o None si no se pudo aplicar.
     """
     condiciones = [Producto.id == producto_id]
     if esperado is not None:
         condiciones.append(Producto.existencias == esperado)
     else:
-        condiciones += [Producto.existencias + delta >= 0, Producto.existencias + delta <= MAX_EXISTENCIAS]
+        condiciones.append(Producto.existencias + delta >= 0)
+        if validar_tope:
+            condiciones.append(Producto.existencias + delta <= MAX_EXISTENCIAS)
     resultado = db.session.execute(
         update(Producto)
         .where(*condiciones)
@@ -332,15 +412,106 @@ def aplicar_movimiento(producto_id, delta, tipo, nota="", usuario_id=None, esper
         .execution_options(synchronize_session=False)
     )
     if resultado.rowcount != 1:
-        db.session.rollback()
         return None
     saldo = db.session.execute(select(Producto.existencias).where(Producto.id == producto_id)).scalar_one()
     db.session.add(
         Movimiento(producto_id=producto_id, tipo=tipo, cantidad=delta, saldo=saldo,
                    nota=nota[:MAX_NOTA], usuario_id=usuario_id)
     )
+    return saldo
+
+
+def aplicar_movimiento(producto_id, delta, tipo, nota="", usuario_id=None, esperado=None):
+    """Un movimiento manual de inventario: se confirma o no cambia nada. Devuelve el saldo o None."""
+    saldo = _mover_stock(producto_id, delta, tipo, nota, usuario_id, esperado)
+    if saldo is None:
+        db.session.rollback()
+        return None
     db.session.commit()
     return saldo
+
+
+def crear_pedido(usuario, lineas, nota, token):
+    """Guarda el pedido y descuenta las existencias en UNA sola transacción.
+
+    Si alguna línea no tiene stock suficiente, no se guarda nada (ni se descuenta nada).
+    Devuelve (pedido, None) si salió bien, (pedido_existente, "duplicado") si el token ya se usó
+    (doble clic) o (None, mensaje) si falta stock.
+    """
+    pedido = Pedido(
+        usuario_id=usuario.id, token=token, nota=nota,
+        unidades=sum(l["cantidad"] for l in lineas), total=sum(l["subtotal"] for l in lineas),
+    )
+    db.session.add(pedido)
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        return Pedido.query.filter_by(token=token, usuario_id=usuario.id).first(), "duplicado"
+
+    for linea in sorted(lineas, key=lambda l: l["producto"].id):
+        producto, cantidad = linea["producto"], linea["cantidad"]
+        producto_id, nombre, valor = producto.id, producto.nombre, producto.valor
+        saldo = _mover_stock(producto_id, -cantidad, "venta", f"Pedido #{pedido.id}", usuario.id)
+        if saldo is None:
+            db.session.rollback()
+            quedan = db.session.execute(select(Producto.existencias).where(Producto.id == producto_id)).scalar() or 0
+            return None, f"Ya no hay suficientes unidades de {nombre} (quedan {quedan})."
+        pedido.detalles.append(
+            PedidoDetalle(producto_id=producto_id, nombre=nombre, valor_unitario=valor, cantidad=cantidad)
+        )
+    db.session.commit()
+    return pedido, None
+
+
+TRANSICIONES = {
+    "preparar": ("recibido", "preparacion", "preparacion_en"),
+    "entregar": ("preparacion", "entregado", "entregado_en"),
+}
+
+
+def cambiar_estado(pedido_id, accion):
+    """Avanza el pedido un paso. Solo si está en el estado de origen (evita pasos repetidos)."""
+    origen, destino, columna = TRANSICIONES[accion]
+    resultado = db.session.execute(
+        update(Pedido)
+        .where(Pedido.id == pedido_id, Pedido.estado == origen)
+        .values(estado=destino, **{columna: datetime.now(timezone.utc)})
+        .execution_options(synchronize_session=False)
+    )
+    if resultado.rowcount != 1:
+        db.session.rollback()
+        return False
+    db.session.commit()
+    return True
+
+
+def cancelar_pedido(pedido_id, usuario, por, motivo=""):
+    """Cancela el pedido y devuelve las existencias, todo en una transacción.
+
+    El cliente solo puede cancelar si el pedido sigue "recibido"; el administrador, también "en preparación".
+    """
+    permitidos = ("recibido",) if por == "cliente" else ("recibido", "preparacion")
+    resultado = db.session.execute(
+        update(Pedido)
+        .where(Pedido.id == pedido_id, Pedido.estado.in_(permitidos))
+        .values(estado="cancelado", cancelado_en=datetime.now(timezone.utc), cancelado_por=por, motivo=motivo[:MAX_NOTA])
+        .execution_options(synchronize_session=False)
+    )
+    if resultado.rowcount != 1:
+        db.session.rollback()
+        return False
+    for detalle in PedidoDetalle.query.filter_by(pedido_id=pedido_id).all():
+        existe = db.session.execute(select(Producto.id).where(Producto.id == detalle.producto_id)).first()
+        if not existe:
+            continue  # el producto ya se eliminó: no hay existencias que devolver
+        saldo = _mover_stock(detalle.producto_id, detalle.cantidad, "devolucion",
+                             f"Pedido #{pedido_id} cancelado", usuario.id, validar_tope=False)
+        if saldo is None:
+            db.session.rollback()
+            return False
+    db.session.commit()
+    return True
 
 
 def interpretar_existencias(texto):
@@ -358,6 +529,7 @@ def datos_del_carrito():
     return {
         "mostrar_carrito": not es_admin,
         "carrito_unidades": 0 if es_admin else detalle_carrito()[1],
+        "pedidos_pendientes": Pedido.query.filter_by(estado="recibido").count() if es_admin else 0,
     }
 
 
@@ -697,20 +869,132 @@ def carrito_vaciar():
     return redirect(url_for("carrito"))
 
 
-@app.route("/pago")
+@app.route("/pedido/nuevo", methods=["GET", "POST"])
 @solo_compradores
-def pago():
-    """Por ahora solo comprueba que haya cuenta; el pago con PSE se desarrollará después."""
+def pedido_nuevo():
+    """Revisar y confirmar el pedido. Exige cuenta; el pago y la entrega son en el local."""
     if not current_user.is_authenticated:
-        flash("Inicia sesión o crea una cuenta para continuar con tu compra.", "error")
+        flash("Inicia sesión o crea una cuenta para confirmar tu pedido.", "error")
         return redirect(url_for("login"))
+
+    if request.method == "POST":
+        token = request.form.get("token", "")[:64]
+        existente = Pedido.query.filter_by(token=token, usuario_id=current_user.id).first() if token else None
+        if existente:  # doble clic o reenvío: no se crea otro pedido
+            session.pop("carrito", None)
+            return redirect(url_for("ver_pedido", pedido_id=existente.id))
+
     lineas, unidades, total = detalle_carrito()
     if not lineas:
         return redirect(url_for("carrito"))
     if any(l["excede"] for l in lineas):
         flash("Hay productos con más unidades de las disponibles. Ajusta las cantidades marcadas.", "error")
         return redirect(url_for("carrito"))
-    return render_template("pago.html", unidades=unidades, total=total)
+
+    if request.method == "POST":
+        nota = " ".join(request.form.get("nota", "").split())
+        if not token:
+            flash("No se pudo verificar el pedido. Inténtalo de nuevo.", "error")
+            return redirect(url_for("pedido_nuevo"))
+        if len(nota) > MAX_NOTA:
+            flash(f"La nota admite hasta {MAX_NOTA} caracteres.", "error")
+            return redirect(url_for("pedido_nuevo"))
+        if request.form.get("total_esperado") != str(total):
+            flash("Los precios o las cantidades cambiaron. Revisa el total actualizado antes de confirmar.", "error")
+            return redirect(url_for("pedido_nuevo"))
+
+        pedido, error = crear_pedido(current_user, lineas, nota, token)
+        if error == "duplicado" and pedido:
+            session.pop("carrito", None)
+            return redirect(url_for("ver_pedido", pedido_id=pedido.id))
+        if pedido is None:
+            flash(error, "error")
+            return redirect(url_for("carrito"))
+        session.pop("carrito", None)
+        flash(f"Pedido #{pedido.id} recibido. Págalo y retíralo en el local.", "success")
+        return redirect(url_for("ver_pedido", pedido_id=pedido.id))
+
+    return render_template(
+        "pedido_nuevo.html", lineas=lineas, unidades=unidades, total=total, token=secrets.token_hex(16),
+        max_nota=MAX_NOTA,
+    )
+
+
+@app.route("/pedidos")
+@login_required
+def mis_pedidos():
+    if current_user.es_admin:
+        return redirect(url_for("pedidos_admin"))
+    pedidos = Pedido.query.filter_by(usuario_id=current_user.id).order_by(Pedido.id.desc()).all()
+    return render_template("mis_pedidos.html", pedidos=pedidos)
+
+
+@app.route("/pedidos/<int:pedido_id>")
+@login_required
+def ver_pedido(pedido_id):
+    pedido = db.session.get(Pedido, pedido_id)
+    if pedido is None or (not current_user.es_admin and pedido.usuario_id != current_user.id):
+        flash("No se encontró el pedido.", "error")
+        return redirect(url_for("pedidos_admin" if current_user.es_admin else "mis_pedidos"))
+    return render_template("pedido_detalle.html", pedido=pedido, max_nota=MAX_NOTA)
+
+
+@app.route("/pedidos/<int:pedido_id>/cancelar", methods=["POST"])
+@login_required
+def pedido_cancelar(pedido_id):
+    pedido = db.session.get(Pedido, pedido_id)
+    if pedido is None or (not current_user.es_admin and pedido.usuario_id != current_user.id):
+        flash("No se encontró el pedido.", "error")
+        return redirect(url_for("pedidos_admin" if current_user.es_admin else "mis_pedidos"))
+
+    por = "administrador" if current_user.es_admin else "cliente"
+    motivo = " ".join(request.form.get("motivo", "").split())[:MAX_NOTA] if current_user.es_admin else ""
+    if cancelar_pedido(pedido_id, current_user, por, motivo):
+        flash(f"Pedido #{pedido_id} cancelado. Las existencias se devolvieron al inventario.", "success")
+    elif current_user.es_admin:
+        flash("Este pedido ya no se puede cancelar (ya fue entregado o cancelado).", "error")
+    else:
+        flash("Este pedido ya no se puede cancelar porque el local ya lo está atendiendo. Comunícate con el local.", "error")
+    return redirect(url_for("ver_pedido", pedido_id=pedido_id))
+
+
+@app.route("/admin/pedidos")
+@admin_requerido
+def pedidos_admin():
+    filtro = request.args.get("estado", "")
+    consulta = Pedido.query
+    if filtro in ESTADOS_PEDIDO:
+        consulta = consulta.filter_by(estado=filtro)
+    else:
+        filtro = ""
+    pedidos = consulta.order_by(Pedido.id.desc()).limit(200).all()
+    conteos = dict(db.session.execute(select(Pedido.estado, func.count()).group_by(Pedido.estado)).all())
+    return render_template(
+        "pedidos_admin.html", pedidos=pedidos, filtro=filtro, conteos=conteos,
+        total_pedidos=sum(conteos.values()), estados=ESTADOS_PEDIDO,
+    )
+
+
+@app.route("/pedidos/<int:pedido_id>/estado", methods=["POST"])
+@admin_requerido
+def pedido_estado(pedido_id):
+    accion = request.form.get("accion", "")
+    destino = (
+        url_for("pedidos_admin", estado=request.form.get("filtro") or None)
+        if request.form.get("volver") == "lista"
+        else url_for("ver_pedido", pedido_id=pedido_id)
+    )
+    if db.session.get(Pedido, pedido_id) is None:
+        flash("No se encontró el pedido.", "error")
+        return redirect(url_for("pedidos_admin"))
+    if accion not in TRANSICIONES:
+        flash("Acción no válida.", "error")
+        return redirect(destino)
+    if cambiar_estado(pedido_id, accion):
+        flash(f"Pedido #{pedido_id}: {'en preparación' if accion == 'preparar' else 'entregado'}.", "success")
+    else:
+        flash(f"El pedido #{pedido_id} ya cambió de estado. Revisa su estado actual.", "error")
+    return redirect(destino)
 
 
 @app.route("/logout", methods=["POST"])

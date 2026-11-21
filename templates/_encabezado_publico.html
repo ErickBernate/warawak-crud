@@ -4,7 +4,9 @@
   <span class="pendiente" title="Próximamente">Acerca de</span>
   {% if current_user.is_authenticated and current_user.es_admin %}
     <a href="{{ url_for('inicio') }}">Panel de administración</a>
-  {% elif not current_user.is_authenticated %}
+  {% elif current_user.is_authenticated %}
+    <a href="{{ url_for('mis_pedidos') }}" {% if request.endpoint in ('mis_pedidos', 'ver_pedido', 'pedido_nuevo') %}aria-current="page"{% endif %}>Mis pedidos</a>
+  {% else %}
     <a href="{{ url_for('registro') }}">Regístrate</a>
   {% endif %}
 </nav>

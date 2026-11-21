@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block titulo %}Pedidos · Warawak{% endblock %}
+{% block menu %}{% include "_menu.html" %}{% endblock %}
+
+{% block contenido %}
+<h1 class="titulo-pagina titulo-izquierda">Pedidos</h1>
+{% include "_avisos.html" %}
+
+<nav class="filtros" aria-label="Filtrar pedidos por estado">
+  <a href="{{ url_for('pedidos_admin') }}" {% if not filtro %}aria-current="page"{% endif %}>Todos ({{ total_pedidos }})</a>
+  {% for clave, texto in estados.items() %}
+  <a href="{{ url_for('pedidos_admin', estado=clave) }}" {% if filtro == clave %}aria-current="page"{% endif %}>{{ texto }} ({{ conteos.get(clave, 0) }})</a>
+  {% endfor %}
+</nav>
+
+{% if pedidos %}
+<div class="tabla-envoltura">
+  <table class="tabla-carrito tabla-inventario">
+    <caption class="solo-lectores">Pedidos recibidos</caption>
+    <thead>
+      <tr><th scope="col">Pedido</th><th scope="col">Fecha</th><th scope="col">Cliente</th><th scope="col">Unidades</th><th scope="col">Total</th><th scope="col">Estado</th><th scope="col">Acciones</th></tr>
+    </thead>
+    <tbody>
+      {% for p in pedidos %}
+      <tr>
+        <th scope="row" class="inventario-nombre">#{{ p.id }}</th>
+        <td class="nowrap">{{ p.creado_en | fecha_local }}</td>
+        <td>{{ p.usuario.nombre }}{% if p.nota %}<br><span class="nota-corta">Nota: {{ p.nota }}</span>{% endif %}</td>
+        <td class="inventario-cifra">{{ p.unidades }}</td>
+        <td class="subtotal">{{ p.total | pesos }}</td>
+        <td><span class="estado estado-{{ p.estado }}">{{ p.estado_texto }}</span></td>
+        <td class="acciones-pedido">
+          {% if p.estado == 'recibido' or p.estado == 'preparacion' %}
+          <form method="post" action="{{ url_for('pedido_estado', pedido_id=p.id) }}">
+            {% include "_csrf.html" %}
+            <input type="hidden" name="accion" value="{{ 'preparar' if p.estado == 'recibido' else 'entregar' }}">
+            <input type="hidden" name="volver" value="lista">
+            <input type="hidden" name="filtro" value="{{ filtro }}">
+            <button type="submit" class="boton-gris">{{ 'Preparar' if p.estado == 'recibido' else 'Entregar' }}<span class="solo-lectores"> el pedido {{ p.id }}</span></button>
+          </form>
+          {% endif %}
+          <a href="{{ url_for('ver_pedido', pedido_id=p.id) }}">Ver<span class="solo-lectores"> el pedido {{ p.id }}</span></a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="ayuda ayuda-izq">Se muestran los 200 pedidos más recientes.</p>
+{% else %}
+<p class="vacio izquierda">No hay pedidos {% if filtro %}en este estado{% else %}todavía{% endif %}.</p>
+{% endif %}
+{% endblock %}

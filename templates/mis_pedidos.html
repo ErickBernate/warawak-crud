@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titulo %}Mis pedidos · Warawak{% endblock %}
+{% block menu %}{% include "_encabezado_publico.html" %}{% endblock %}
+
+{% block contenido %}
+{% include "_avisos.html" %}
+<h1 class="titulo-pagina titulo-izquierda">Mis pedidos</h1>
+
+{% if pedidos %}
+<div class="tabla-envoltura">
+  <table class="tabla-carrito tabla-inventario">
+    <caption class="solo-lectores">Pedidos que has realizado</caption>
+    <thead>
+      <tr><th scope="col">Pedido</th><th scope="col">Fecha</th><th scope="col">Unidades</th><th scope="col">Total</th><th scope="col">Estado</th><th scope="col">Detalle</th></tr>
+    </thead>
+    <tbody>
+      {% for p in pedidos %}
+      <tr>
+        <th scope="row" class="inventario-nombre">#{{ p.id }}</th>
+        <td class="nowrap">{{ p.creado_en | fecha_local }}</td>
+        <td class="inventario-cifra">{{ p.unidades }}</td>
+        <td class="subtotal">{{ p.total | pesos }}</td>
+        <td><span class="estado estado-{{ p.estado }}">{{ p.estado_texto }}</span></td>
+        <td><a href="{{ url_for('ver_pedido', pedido_id=p.id) }}">Ver<span class="solo-lectores"> el pedido {{ p.id }}</span></a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="panel-mensaje" role="status">
+  <p>Aún no tienes pedidos.</p>
+  <a class="boton-ok" href="{{ url_for('raiz') }}">Ver el menú</a>
+</div>
+{% endif %}
+{% endblock %}

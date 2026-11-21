@@ -49,10 +49,10 @@
     <p class="resumen-linea"><span>Unidades</span><strong>{{ unidades }}</strong></p>
     <p class="resumen-total"><span>Total</span><strong>{{ total | pesos }}</strong></p>
     {% if hay_excedidos %}
-    <span class="boton-rojo boton-pagar deshabilitado" aria-disabled="true">Continuar con el pago</span>
+    <span class="boton-rojo boton-pagar deshabilitado" aria-disabled="true">Confirmar pedido</span>
     <p class="advertencia-linea">Ajusta los productos marcados para continuar.</p>
     {% else %}
-    <a class="boton-rojo boton-pagar" href="{{ url_for('pago') }}">Continuar con el pago</a>
+    <a class="boton-rojo boton-pagar" href="{{ url_for('pedido_nuevo') }}">Confirmar pedido</a>
     {% endif %}
     <a class="resumen-enlace" href="{{ url_for('raiz') }}">Seguir comprando</a>
     <form method="post" action="{{ url_for('carrito_vaciar') }}">

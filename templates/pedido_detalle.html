@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block titulo %}Pedido #{{ pedido.id }} · Warawak{% endblock %}
+{% block menu %}{% if current_user.es_admin %}{% include "_menu.html" %}{% else %}{% include "_encabezado_publico.html" %}{% endif %}{% endblock %}
+
+{% block contenido %}
+{% include "_avisos.html" %}
+<p class="migas">
+  {% if current_user.es_admin %}<a href="{{ url_for('pedidos_admin') }}">← Volver a los pedidos</a>
+  {% else %}<a href="{{ url_for('mis_pedidos') }}">← Volver a mis pedidos</a>{% endif %}
+</p>
+
+<h1 class="titulo-pagina titulo-izquierda pedido-titulo">
+  Pedido #{{ pedido.id }} <span class="estado estado-{{ pedido.estado }}">{{ pedido.estado_texto }}</span>
+</h1>
+
+<div class="carrito">
+  <div>
+    <div class="tabla-envoltura">
+      <table class="tabla-carrito">
+        <caption class="solo-lectores">Productos del pedido {{ pedido.id }}</caption>
+        <thead>
+          <tr><th scope="col">Producto</th><th scope="col">Precio</th><th scope="col">Cantidad</th><th scope="col">Subtotal</th></tr>
+        </thead>
+        <tbody>
+          {% for d in pedido.detalles %}
+          <tr>
+            <th scope="row" class="inventario-nombre">{{ d.nombre }}</th>
+            <td>{{ d.valor_unitario | pesos }}</td>
+            <td>{{ d.cantidad }}</td>
+            <td class="subtotal">{{ d.subtotal | pesos }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pedido.nota %}<p class="pedido-nota"><strong>Nota para el local:</strong> {{ pedido.nota }}</p>{% endif %}
+    {% if current_user.es_admin %}
+    <p class="pedido-nota"><strong>Cliente:</strong> {{ pedido.usuario.nombre }}{% if pedido.usuario.contacto %} · {{ pedido.usuario.contacto }}{% endif %}</p>
+    {% endif %}
+
+    <h2 class="subtitulo-historial">Seguimiento</h2>
+    <ol class="linea-tiempo">
+      <li class="hecho"><strong>Recibido</strong> <span>{{ pedido.creado_en | fecha_local }}</span></li>
+      {% if pedido.estado == 'cancelado' %}
+      <li class="cancelado"><strong>Cancelado</strong> <span>{{ pedido.cancelado_en | fecha_local }} · por el {{ pedido.cancelado_por }}</span>
+        {% if pedido.motivo %}<br><span>Motivo: {{ pedido.motivo }}</span>{% endif %}</li>
+      {% else %}
+      <li class="{{ 'hecho' if pedido.preparacion_en else 'pendiente' }}"><strong>En preparación</strong> <span>{{ pedido.preparacion_en | fecha_local if pedido.preparacion_en else 'Pendiente' }}</span></li>
+      <li class="{{ 'hecho' if pedido.entregado_en else 'pendiente' }}"><strong>Entregado</strong> <span>{{ pedido.entregado_en | fecha_local if pedido.entregado_en else 'Pendiente' }}</span></li>
+      {% endif %}
+    </ol>
+
+    {% if current_user.es_admin %}
+    <p class="pedido-tiempos">Tiempo hasta empezar la preparación: <strong>{{ pedido.segundos_espera | duracion }}</strong> ·
+      Tiempo total de atención: <strong>{{ pedido.segundos_total | duracion }}</strong></p>
+    {% endif %}
+  </div>
+
+  <aside class="resumen" aria-label="Resumen del pedido">
+    <p class="resumen-linea"><span>Unidades</span><strong>{{ pedido.unidades }}</strong></p>
+    <p class="resumen-total"><span>Total</span><strong>{{ pedido.total | pesos }}</strong></p>
+    <p class="ayuda ayuda-izq">Se paga y se retira en el local.</p>
+
+    {% if current_user.es_admin %}
+      {% if pedido.estado == 'recibido' %}
+      <form method="post" action="{{ url_for('pedido_estado', pedido_id=pedido.id) }}">
+        {% include "_csrf.html" %}<input type="hidden" name="accion" value="preparar">
+        <button type="submit" class="boton-rojo boton-pagar boton-solo">Empezar a preparar</button>
+      </form>
+      {% elif pedido.estado == 'preparacion' %}
+      <form method="post" action="{{ url_for('pedido_estado', pedido_id=pedido.id) }}">
+        {% include "_csrf.html" %}<input type="hidden" name="accion" value="entregar">
+        <button type="submit" class="boton-rojo boton-pagar boton-solo">Marcar como entregado</button>
+      </form>
+      {% endif %}
+      {% if pedido.estado in ('recibido', 'preparacion') %}
+      <details class="cancelar">
+        <summary>Cancelar este pedido</summary>
+        <form method="post" action="{{ url_for('pedido_cancelar', pedido_id=pedido.id) }}">
+          {% include "_csrf.html" %}
+          <label for="motivo">Motivo (opcional)</label>
+          <input class="campo" type="text" id="motivo" name="motivo" maxlength="{{ max_nota }}" placeholder="Ej.: el cliente no llegó">
+          <p class="ayuda ayuda-izq">Las existencias volverán al inventario.</p>
+          <button type="submit" class="boton-gris">Confirmar cancelación</button>
+        </form>
+      </details>
+      {% endif %}
+    {% elif pedido.estado == 'recibido' %}
+      <details class="cancelar">
+        <summary>Cancelar mi pedido</summary>
+        <form method="post" action="{{ url_for('pedido_cancelar', pedido_id=pedido.id) }}">
+          {% include "_csrf.html" %}
+          <p class="ayuda ayuda-izq">Puedes cancelar mientras el local no haya empezado a prepararlo.</p>
+          <button type="submit" class="boton-gris">Sí, cancelar mi pedido</button>
+        </form>
+      </details>
+    {% elif pedido.estado == 'preparacion' %}
+      <p class="ayuda ayuda-izq">El local ya está preparando tu pedido. Para cambiarlo, comunícate con el local.</p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

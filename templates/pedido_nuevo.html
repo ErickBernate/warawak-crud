@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block titulo %}Confirmar pedido · Warawak{% endblock %}
+{% block menu %}{% include "_encabezado_publico.html" %}{% endblock %}
+
+{% block contenido %}
+{% include "_avisos.html" %}
+<h1 class="titulo-pagina titulo-izquierda">Confirmar pedido</h1>
+
+<div class="carrito">
+  <div class="tabla-envoltura">
+    <table class="tabla-carrito">
+      <caption class="solo-lectores">Productos de tu pedido</caption>
+      <thead>
+        <tr><th scope="col">Producto</th><th scope="col">Precio</th><th scope="col">Cantidad</th><th scope="col">Subtotal</th></tr>
+      </thead>
+      <tbody>
+        {% for l in lineas %}
+        <tr>
+          <th scope="row" class="inventario-nombre">{{ l.producto.nombre }}</th>
+          <td>{{ l.producto.valor | pesos }}</td>
+          <td>{{ l.cantidad }}</td>
+          <td class="subtotal">{{ l.subtotal | pesos }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form class="resumen" method="post" action="{{ url_for('pedido_nuevo') }}" data-una-vez>
+    {% include "_csrf.html" %}
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="total_esperado" value="{{ total }}">
+    <p class="resumen-linea"><span>Unidades</span><strong>{{ unidades }}</strong></p>
+    <p class="resumen-total"><span>Total</span><strong>{{ total | pesos }}</strong></p>
+
+    <label for="nota" class="etiqueta-nota">Nota para el local (opcional)</label>
+    <textarea class="campo campo-area" id="nota" name="nota" rows="3" maxlength="{{ max_nota }}" placeholder="Ej.: sin azúcar"></textarea>
+    <p class="ayuda ayuda-izq">El pedido se paga y se retira en el local. Por ahora no se cobra en línea.</p>
+
+    <button type="submit" class="boton-rojo boton-pagar boton-solo">Confirmar pedido</button>
+    <a class="resumen-enlace" href="{{ url_for('carrito') }}">Volver al carrito</a>
+  </form>
+</div>
+
+<script src="{{ url_for('static', filename='js/pedido.js') }}"></script>
+{% endblock %}

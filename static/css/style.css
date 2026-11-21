@@ -324,6 +324,39 @@ a.boton-editar:hover { background: #a39e9e; }
 .advertencia-linea { margin: 6px 0 0; font-size: .8rem; color: #9b2222; font-weight: 600; }
 .boton-pagar.deshabilitado { opacity: .45; cursor: not-allowed; }
 
+
+/* pedidos */
+.estado-recibido { background: #dbe8fb; color: #14346b; }
+.estado-preparacion { background: #fbecc4; color: #6b4b00; }
+.estado-entregado { background: #dcf1e2; color: #17502a; }
+.estado-cancelado { background: #e6e6e6; color: #444; }
+.insignia-menu { position: static; display: inline-grid; margin-left: 6px; vertical-align: middle; }
+.pedido-titulo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.pedido-nota, .pedido-tiempos { margin: 16px 0 0; font-size: .95rem; overflow-wrap: anywhere; }
+.pedido-tiempos { color: #444; }
+.linea-tiempo { list-style: none; margin: 0; padding: 0 0 0 4px; }
+.linea-tiempo li { position: relative; padding: 0 0 18px 26px; border-left: 2px solid var(--linea); margin-left: 6px; }
+.linea-tiempo li::before { content: ""; position: absolute; left: -7px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid #999; }
+.linea-tiempo li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.linea-tiempo li.hecho::before { background: #2e8b57; border-color: #2e8b57; }
+.linea-tiempo li.cancelado::before { background: #9b2222; border-color: #9b2222; }
+.linea-tiempo li strong { display: block; font-size: .95rem; }
+.linea-tiempo li span { font-size: .85rem; color: #555; }
+.cancelar { margin-top: 6px; font-size: .9rem; }
+.cancelar summary { cursor: pointer; color: #9b2222; text-decoration: underline; }
+.cancelar form { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.cancelar .campo { height: 38px; border-radius: 19px; }
+.cancelar label, .etiqueta-nota { font-size: .85rem; padding-left: 6px; }
+.boton-solo { width: 100%; }
+.resumen form { text-align: left; }
+.filtros { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.filtros a { padding: 6px 14px; background: #f1f1f1; color: var(--tinta); text-decoration: none; font-size: .9rem; }
+.filtros a:hover { background: #e4e4e4; }
+.filtros a[aria-current="page"] { background: #14143c; color: #fff; font-weight: 600; }
+.acciones-pedido { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.acciones-pedido form { margin: 0; }
+.nota-corta { font-size: .8rem; color: #555; overflow-wrap: anywhere; }
+
 /* ---------- pie ---------- */
 .pie { background: var(--pie); color: #fff; margin: 0 auto; width: 100%; max-width: calc(var(--ancho) + 40px); }
 .pie-interno {
